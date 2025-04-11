@@ -33,15 +33,19 @@ User Command: "{user_input}"
         )
         result = response.json()
 
-        # ✅ Check for 'candidates' safely
+        # 🔎 Print the full raw result so we can see what’s coming back
+        print("🔍 Gemini raw response:", result)
+
+        # Still try to return something useful
         if 'candidates' in result and result['candidates']:
             return result['candidates'][0]['content']['parts'][0]['text']
         elif 'error' in result:
             return f"⚠️ Gemini API Error: {result['error'].get('message', 'Unknown error')}"
         else:
-            return f"⚠️ Unexpected response from Gemini: {result}"
+            return f"⚠️ Unexpected response from Gemini:\n{result}"
     except Exception as e:
         return f"⚠️ Exception calling Gemini: {e}"
+
 
 
 # 🧵 Gemini logic in a background thread
