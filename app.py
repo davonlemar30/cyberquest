@@ -15,9 +15,9 @@ User ID: {user_id}
 Command: "{user_input}"
 """
 
+    # Note: Remove the Authorization header and pass the API key as a query parameter.
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('GEMINI_API_KEY')}"
+        "Content-Type": "application/json"
     }
 
     body = {
@@ -30,13 +30,14 @@ Command: "{user_input}"
         "candidateCount": 1
     }
 
+    # Append the API key as a query parameter instead of sending it as a Bearer token.
+    api_key = os.getenv('GEMINI_API_KEY')
+    url = f"https://generativelanguage.googleapis.com/v1beta2/models/chat-bison-001:generateMessage?key={api_key}"
+
     try:
-        response = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta2/models/chat-bison-001:generateMessage",
-            headers=headers,
-            json=body
-        )
+        response = requests.post(url, headers=headers, json=body)
         result = response.json()
+        print("🔍 Gemini raw response:", result)
 
         if 'candidates' in result and result['candidates']:
             return result['candidates'][0]['content']
@@ -46,6 +47,7 @@ Command: "{user_input}"
             return f"⚠️ Unexpected response from Gemini:\n{result}"
     except Exception as e:
         return f"⚠️ Exception calling Gemini: {e}"
+
 
 
 
