@@ -7,18 +7,20 @@ app = Flask(__name__)
 
 # 🔑 Gemini API call
 def call_gemini_api(user_input, user_id):
+    api_key = os.getenv('GEMINI_API_KEY')
+    
+    if not api_key:
+        return "⚠️ ERROR: GEMINI_API_KEY is not being loaded from the environment."
+
     prompt = f"""
 You are the narrator of an interactive cybersecurity adventure called *CyberQuest*. 
-The user will type commands like "open email", "inspect sender", "report phishing", etc.
-
-Always respond with immersive story text based on their input. Continue the narrative unless the user types 'exit' or 'quit'.
-
 User ID: {user_id}
 User Command: "{user_input}"
 """
+
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('GEMINI_API_KEY')}"
+        "Authorization": f"Bearer {api_key}"
     }
 
     body = {
@@ -33,10 +35,6 @@ User Command: "{user_input}"
         )
         result = response.json()
 
-        # 🔎 Print the full raw result so we can see what’s coming back
-        print("🔍 Gemini raw response:", result)
-
-        # Still try to return something useful
         if 'candidates' in result and result['candidates']:
             return result['candidates'][0]['content']['parts'][0]['text']
         elif 'error' in result:
@@ -45,6 +43,7 @@ User Command: "{user_input}"
             return f"⚠️ Unexpected response from Gemini:\n{result}"
     except Exception as e:
         return f"⚠️ Exception calling Gemini: {e}"
+
 
 
 
