@@ -28,7 +28,7 @@ genai.configure(credentials=credentials)
 # 💬 Manage conversation sessions
 def get_chat_session(conversation_id):
     if conversation_id not in chat_sessions:
-        session = genai.GenerativeModel("gemini-2.0-flash").start_chat(
+        session = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
             history=[
                 {"role": "user", "parts": ["You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*. Guide the user through immersive, engaging, and educational cybersecurity scenarios based on their commands. Continue the story until they type 'exit'."]}
             ]
