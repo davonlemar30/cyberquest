@@ -9,9 +9,9 @@ app = Flask(__name__)
 def call_gemini_api(user_input, user_id):
     prompt = f"""
 You are the narrator of an interactive cybersecurity adventure called *CyberQuest*. 
-The user will type commands like "open email", "inspect sender", "report phishing", or anything else.
+The user will type commands like "open email", "inspect sender", "report phishing", etc.
 
-Respond with rich, immersive story text based on their input. Always continue the story unless they type 'exit' or 'quit'.
+Always respond with immersive story text based on their input. Continue the narrative unless the user types 'exit' or 'quit'.
 
 User ID: {user_id}
 User Command: "{user_input}"
@@ -32,9 +32,17 @@ User Command: "{user_input}"
             json=body
         )
         result = response.json()
-        return result['candidates'][0]['content']['parts'][0]['text']
+
+        # ✅ Check for 'candidates' safely
+        if 'candidates' in result and result['candidates']:
+            return result['candidates'][0]['content']['parts'][0]['text']
+        elif 'error' in result:
+            return f"⚠️ Gemini API Error: {result['error'].get('message', 'Unknown error')}"
+        else:
+            return f"⚠️ Unexpected response from Gemini: {result}"
     except Exception as e:
-        return f"⚠️ Error calling Gemini: {e}"
+        return f"⚠️ Exception calling Gemini: {e}"
+
 
 # 🧵 Gemini logic in a background thread
 def handle_gemini_response(response_url, user_input, user_id):
