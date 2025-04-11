@@ -7,42 +7,46 @@ app = Flask(__name__)
 
 # 🔑 Gemini API call
 def call_gemini_api(user_input, user_id):
-    api_key = os.getenv('GEMINI_API_KEY')
-    
-    if not api_key:
-        return "⚠️ ERROR: GEMINI_API_KEY is not being loaded from the environment."
-
     prompt = f"""
-You are the narrator of an interactive cybersecurity adventure called *CyberQuest*. 
+You are the narrator of a Slack-based cybersecurity adventure game called *CyberQuest*. 
+Continue the immersive story based on the user’s command.
+
 User ID: {user_id}
-User Command: "{user_input}"
+Command: "{user_input}"
 """
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {os.getenv('GEMINI_API_KEY')}"
     }
 
     body = {
-        "contents": [{"parts": [{"text": prompt}]}]
+        "prompt": {
+            "messages": [
+                {"author": "user", "content": prompt}
+            ]
+        },
+        "temperature": 0.9,
+        "candidateCount": 1
     }
 
     try:
         response = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta2/models/chat-bison-001:generateMessage",
             headers=headers,
             json=body
         )
         result = response.json()
 
         if 'candidates' in result and result['candidates']:
-            return result['candidates'][0]['content']['parts'][0]['text']
+            return result['candidates'][0]['content']
         elif 'error' in result:
             return f"⚠️ Gemini API Error: {result['error'].get('message', 'Unknown error')}"
         else:
             return f"⚠️ Unexpected response from Gemini:\n{result}"
     except Exception as e:
         return f"⚠️ Exception calling Gemini: {e}"
+
 
 
 
