@@ -62,14 +62,45 @@ def call_gemini_flash(user_input, conversation_id):
 # 🧵 Background thread handler for Slack
 def handle_gemini_response(response_url, user_input, user_id):
     raw_reply = call_gemini_flash(user_input, user_id)
-    
-    # Optional formatting tweaks
     formatted_reply = format_for_slack(raw_reply)
+
+    # Send Slack Block Kit message with buttons
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": formatted_reply
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Check #general"
+                    },
+                    "action_id": "check_general"
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Read DM"
+                    },
+                    "action_id": "read_dm"
+                }
+            ]
+        }
+    ]
 
     requests.post(response_url, json={
         "response_type": "in_channel",
-        "text": formatted_reply
+        "blocks": blocks
     })
+
 
 def format_for_slack(text):
     # Basic cleanup
@@ -124,7 +155,6 @@ def slack_interactive():
     user_id = data["user"]["id"]
     response_url = data["response_url"]
 
-    # Branch based on which button was clicked
     if action_id == "check_general":
         reply = call_gemini_flash("check #general", user_id)
 
@@ -132,7 +162,7 @@ def slack_interactive():
         reply = call_gemini_flash("read direct message", user_id)
 
     else:
-        reply = "I didn't understand that action."
+        reply = "🤖 I didn’t understand that action."
 
     requests.post(response_url, json={
         "response_type": "in_channel",
