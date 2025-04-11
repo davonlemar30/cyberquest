@@ -2,63 +2,55 @@ from flask import Flask, request, jsonify
 import os
 import requests
 import threading
+import base64
+import json
+import google.generativeai as genai
+from google.oauth2 import service_account
 
 app = Flask(__name__)
+chat_sessions = {}
 
-# 🔑 Gemini API call
-def call_gemini_api(user_input, user_id):
-    prompt = f"""
-You are the narrator of a Slack-based cybersecurity adventure game called *CyberQuest*. 
-Continue the immersive story based on the user’s command.
+# 🔐 Load credentials from base64 JSON (Render ENV)
+def get_google_credentials():
+    encoded = os.getenv("GEMINI_SERVICE_ACCOUNT")
+    if not encoded:
+        raise Exception("Missing GEMINI_SERVICE_ACCOUNT in environment")
+    service_account_info = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    return service_account.Credentials.from_service_account_info(
+        service_account_info,
+        scopes=["https://www.googleapis.com/auth/generative-language"]
+    )
 
-User ID: {user_id}
-Command: "{user_input}"
-"""
+# 🔁 Initialize Gemini client once
+credentials = get_google_credentials()
+genai.configure(credentials=credentials)
 
-    # Note: Remove the Authorization header and pass the API key as a query parameter.
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    body = {
-        "prompt": {
-            "messages": [
-                {"author": "user", "content": prompt}
+# 💬 Manage conversation sessions
+def get_chat_session(conversation_id):
+    if conversation_id not in chat_sessions:
+        session = genai.GenerativeModel("gemini-2.0-flash").start_chat(
+            history=[
+                {"role": "user", "parts": ["You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*. Guide the user through immersive, engaging, and educational cybersecurity scenarios based on their commands. Continue the story until they type 'exit'."]}
             ]
-        },
-        "temperature": 0.9,
-        "candidateCount": 1
-    }
+        )
+        chat_sessions[conversation_id] = session
+    return chat_sessions[conversation_id]
 
-    # Append the API key as a query parameter instead of sending it as a Bearer token.
-    api_key = os.getenv('GEMINI_API_KEY')
-    url = f"https://generativelanguage.googleapis.com/v1beta2/models/chat-bison-001:generateMessage?key={api_key}"
-
+# 🧠 Main Gemini interaction
+def call_gemini_flash(user_input, conversation_id):
     try:
-        response = requests.post(url, headers=headers, json=body)
-        result = response.json()
-        print("🔍 Gemini raw response:", result)
-
-        if 'candidates' in result and result['candidates']:
-            return result['candidates'][0]['content']
-        elif 'error' in result:
-            return f"⚠️ Gemini API Error: {result['error'].get('message', 'Unknown error')}"
-        else:
-            return f"⚠️ Unexpected response from Gemini:\n{result}"
+        session = get_chat_session(conversation_id)
+        response = session.send_message(user_input)
+        return response.text
     except Exception as e:
-        return f"⚠️ Exception calling Gemini: {e}"
+        return f"⚠️ Gemini Error: {e}"
 
-
-
-
-
-
-# 🧵 Gemini logic in a background thread
+# 🧵 Background thread handler for Slack
 def handle_gemini_response(response_url, user_input, user_id):
-    gemini_reply = call_gemini_api(user_input, user_id)
+    reply = call_gemini_flash(user_input, user_id)
     requests.post(response_url, json={
-        "response_type": "in_channel",  # Or "ephemeral" for private replies
-        "text": gemini_reply
+        "response_type": "in_channel",
+        "text": reply
     })
 
 # 🚪 Slack endpoint
@@ -68,7 +60,6 @@ def cyberquest():
     user_id = request.form.get("user_id")
     response_url = request.form.get("response_url")
 
-    # Immediately respond to Slack to prevent timeout
     threading.Thread(target=handle_gemini_response, args=(response_url, user_input, user_id)).start()
 
     return jsonify({
