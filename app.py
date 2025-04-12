@@ -64,17 +64,24 @@ def format_for_slack(text):
     text = text.replace("**", "*").replace("##", "*").replace(" - ", "• ").replace("  ", " ")
     lines = text.split("\n")
     formatted = []
+
     for line in lines:
-        if "From:" in line or "Subject:" in line:
-            line = f":email: *{line.strip()}*"
-        elif "IP" in line or "192." in line:
-            line = f":mag_right: `{line.strip()}`"
-        elif "report" in line.lower():
-            line = f":warning: {line.strip()}"
-        elif line.strip().lower().startswith("what do you"):
-            line = f"\n*{line.strip()}*"
+        stripped = line.strip()
+        # Skip bullets so they only show as buttons
+        if stripped.startswith("•"):
+            continue
+        elif "From:" in stripped or "Subject:" in stripped:
+            line = f":email: *{stripped}*"
+        elif "IP" in stripped or "192." in stripped:
+            line = f":mag_right: `{stripped}`"
+        elif "report" in stripped.lower():
+            line = f":warning: {stripped}"
+        elif stripped.lower().startswith("what do you") or stripped.lower().startswith("what’s next") or stripped.lower().startswith("what is your next move"):
+            line = f"\n*{stripped}*"
         formatted.append(line)
+
     return "\n".join(formatted).strip()
+
 
 # 🟡 Extract choices from Gemini response
 def extract_choices(text):
