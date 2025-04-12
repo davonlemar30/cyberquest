@@ -41,7 +41,8 @@ Respond with clear, Slack-formatted responses using:
 - line breaks for clarity
 - NEVER write in one long wall of text
 
-Be immersive, but break things into readable chunks. Ask the player what they want to do next."""
+Be immersive, but break things into readable chunks. Ask the player what they want to do next. At the end of each response, include 2 to 4 bullet points of simple next-step choices, each starting with a bullet (•).
+"""
                     ]
                 }
             ]
@@ -49,8 +50,7 @@ Be immersive, but break things into readable chunks. Ask the player what they wa
         chat_sessions[conversation_id] = session
     return chat_sessions[conversation_id]
 
-
-# 🧠 Main Gemini interaction
+# 🧠 Gemini interaction
 def call_gemini_flash(user_input, conversation_id):
     try:
         session = get_chat_session(conversation_id)
@@ -59,60 +59,11 @@ def call_gemini_flash(user_input, conversation_id):
     except Exception as e:
         return f"⚠️ Gemini Error: {e}"
 
-# 🧵 Background thread handler for Slack
-def handle_gemini_response(response_url, user_input, user_id):
-    raw_reply = call_gemini_flash(user_input, user_id)
-    formatted_reply = format_for_slack(raw_reply)
-
-    # Send Slack Block Kit message with buttons
-    blocks = [
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": formatted_reply
-            }
-        },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Check #general"
-                    },
-                    "action_id": "check_general"
-                },
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Read DM"
-                    },
-                    "action_id": "read_dm"
-                }
-            ]
-        }
-    ]
-
-    requests.post(response_url, json={
-        "response_type": "in_channel",
-        "blocks": blocks
-    })
-
-
+# 🔤 Format Gemini text for Slack
 def format_for_slack(text):
-    # Basic cleanup
-    text = text.replace("**", "*")  # Markdown to Slack
-    text = text.replace("##", "*")  # Markdown headings
-    text = text.replace(" - ", "• ")  # Convert list dashes
-    text = text.replace("  ", " ")
-
-    # Keyword cleanup for structure
+    text = text.replace("**", "*").replace("##", "*").replace(" - ", "• ").replace("  ", " ")
     lines = text.split("\n")
     formatted = []
-
     for line in lines:
         if "From:" in line or "Subject:" in line:
             line = f":email: *{line.strip()}*"
@@ -122,14 +73,42 @@ def format_for_slack(text):
             line = f":warning: {line.strip()}"
         elif line.strip().lower().startswith("what do you"):
             line = f"\n*{line.strip()}*"
-
         formatted.append(line)
-
     return "\n".join(formatted).strip()
 
+# 🟡 Extract choices from Gemini response
+def extract_choices(text):
+    lines = text.split("\n")
+    choices = []
+    for line in lines:
+        if line.strip().startswith("•"):
+            label = line.strip("• ").strip()
+            if label:
+                choices.append(label)
+    return choices
 
+# 🔳 Build Slack button blocks
+def build_slack_blocks(formatted_reply, choices):
+    buttons = []
+    for i, choice in enumerate(choices[:5]):
+        buttons.append({
+            "type": "button",
+            "text": { "type": "plain_text", "text": choice },
+            "action_id": f"choice_{i}",
+            "value": choice
+        })
+    return [
+        {
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": formatted_reply }
+        },
+        {
+            "type": "actions",
+            "elements": buttons
+        }
+    ]
 
-# 🚪 Slack endpoint
+# 🚪 Slash command entrypoint
 @app.route("/cyberquest", methods=["POST"])
 def cyberquest():
     user_input = request.form.get("text")
@@ -143,54 +122,39 @@ def cyberquest():
         "text": "🧠 Processing your CyberQuest move..."
     })
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# 🧵 Handles Slack slash command async
+def handle_gemini_response(response_url, user_input, user_id):
+    raw_reply = call_gemini_flash(user_input, user_id)
+    formatted_reply = format_for_slack(raw_reply)
+    choices = extract_choices(raw_reply)
+    blocks = build_slack_blocks(formatted_reply, choices)
 
+    requests.post(response_url, json={
+        "response_type": "in_channel",
+        "blocks": blocks
+    })
+
+# 📥 Slack Interactivity Endpoint
 @app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
     payload = request.form.get("payload")
     data = json.loads(payload)
 
-    action_id = data["actions"][0]["action_id"]
+    choice = data["actions"][0]["value"]
     user_id = data["user"]["id"]
     response_url = data["response_url"]
 
-    if action_id == "check_general":
-        reply = call_gemini_flash("check #general", user_id)
-
-    elif action_id == "read_dm":
-        reply = call_gemini_flash("read direct message", user_id)
-
-    else:
-        reply = "🤖 I didn’t understand that action."
+    reply = call_gemini_flash(choice, user_id)
+    formatted_reply = format_for_slack(reply)
+    choices = extract_choices(reply)
+    blocks = build_slack_blocks(formatted_reply, choices)
 
     requests.post(response_url, json={
         "response_type": "in_channel",
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": reply
-                }
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": { "type": "plain_text", "text": "Check #general" },
-                        "action_id": "check_general"
-                    },
-                    {
-                        "type": "button",
-                        "text": { "type": "plain_text", "text": "Read DM" },
-                        "action_id": "read_dm"
-                    }
-                ]
-            }
-        ]
+        "blocks": blocks
     })
 
     return "", 200
 
+if __name__ == "__main__":
+    app.run(debug=True)
