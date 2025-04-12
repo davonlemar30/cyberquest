@@ -166,7 +166,30 @@ def slack_interactive():
 
     requests.post(response_url, json={
         "response_type": "in_channel",
-        "text": reply
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": reply
+                }
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": { "type": "plain_text", "text": "Check #general" },
+                        "action_id": "check_general"
+                    },
+                    {
+                        "type": "button",
+                        "text": { "type": "plain_text", "text": "Read DM" },
+                        "action_id": "read_dm"
+                    }
+                ]
+            }
+        ]
     })
 
     return "", 200
