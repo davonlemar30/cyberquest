@@ -30,22 +30,22 @@ def get_chat_session(conversation_id):
     if conversation_id not in chat_sessions:
         session = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
             history=[
-                {
-                    "role": "user",
-                    "parts": [
-                        """You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*.
+    {
+        "role": "user",
+        "parts": [
+            """You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*.
 
-Respond with clear, Slack-formatted responses using:
-- *bold* for emphasis
-- bullet points for options
-- line breaks for clarity
-- NEVER write in one long wall of text
+Respond with short, Slack-formatted messages that simulate common security situations. The user works at a company called Microcom. They might receive suspicious emails, links, files, or messages that test their ability to spot red flags.
 
-Be immersive, but break things into readable chunks. Ask the player what they want to do next. At the end of each response, include 2 to 4 bullet points of simple next-step choices, each starting with a bullet (•).
-"""
-                    ]
-                }
-            ]
+Use simple language. Never assume technical knowledge. Always explain the risk through story and subtle clues.
+
+At the end of each message, include 2 to 4 action choices beginning with a bullet (•). NEVER write a wall of text.
+
+Do not use job titles. Just make it feel like the user is someone working at Microcom handling their daily routine."""
+        ]
+    }
+]
+
         )
         chat_sessions[conversation_id] = session
     return chat_sessions[conversation_id]
