@@ -55,6 +55,7 @@ def call_gemini_flash(user_input, conversation_id):
     try:
         session = get_chat_session(conversation_id)
         response = session.send_message(user_input)
+        print("Gemini response raw:", response.text)
         return response.text
     except Exception as e:
         return f"⚠️ Gemini Error: {e}"
