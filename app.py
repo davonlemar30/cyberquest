@@ -62,26 +62,45 @@ def call_gemini_flash(user_input, conversation_id):
 
 # 🔤 Format Gemini text for Slack
 def format_for_slack(text):
-    text = text.replace("**", "*").replace("##", "*").replace(" - ", "• ").replace("  ", " ")
+    # Replace markdown headers
+    text = text.replace("**", "*").replace("##", "*")
+    
+    # Normalize list markers: convert hyphens to bullet points.
+    text = text.replace(" - ", "• ")
+
+    # Normalize extra spaces
+    text = text.replace("  ", " ")
+
+    # Split text into paragraphs by double newline, then recombine with an extra newline.
+    paragraphs = text.split("\n\n")
+    paragraphs = [para.strip() for para in paragraphs if para.strip()]
+    text = "\n\n".join(paragraphs)
+
+    # Now process each line to add emoji or highlights based on keywords.
     lines = text.split("\n")
     formatted = []
-
     for line in lines:
         stripped = line.strip()
-        # Skip bullets so they only show as buttons
         if stripped.startswith("•"):
+            # Skip the bullet lines so they show only as buttons.
             continue
         elif "From:" in stripped or "Subject:" in stripped:
+            # Emphasize these headers.
             line = f":email: *{stripped}*"
         elif "IP" in stripped or "192." in stripped:
             line = f":mag_right: `{stripped}`"
         elif "report" in stripped.lower():
             line = f":warning: {stripped}"
-        elif stripped.lower().startswith("what do you") or stripped.lower().startswith("what’s next") or stripped.lower().startswith("what is your next move"):
+        elif (stripped.lower().startswith("what do you") or 
+              stripped.lower().startswith("what’s next") or 
+              stripped.lower().startswith("what is your next move")):
+            # Make the question stand out on a new line.
             line = f"\n*{stripped}*"
         formatted.append(line)
-
+    
+    # Join with newlines
     return "\n".join(formatted).strip()
+
 
 
 # 🟡 Extract choices from Gemini response
