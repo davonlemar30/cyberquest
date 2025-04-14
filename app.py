@@ -62,28 +62,31 @@ def call_gemini_flash(user_input, conversation_id):
         return f"⚠️ Gemini Error: {e}"
 
 ##########################################
-# 3. Formatting Logic
+# 3. Formatting & Extraction
 ##########################################
 def format_scenario_text(text):
     """
-    Formats the main scenario text for Slack (minus bullets).
-    We'll keep bullet lines separate as a 'Choice List' block.
+    Formats the main scenario text for Slack, removing bullet lines entirely
+    so we don't repeat them in the scenario. Bullets will appear as buttons only.
     """
     # Basic cleanup
     text = text.replace("**", "*").replace("##", "*").replace("  ", " ")
-    text = text.replace(" - ", "• ")  # If you want bullet conversions in normal text
+    text = text.replace(" - ", "• ")  # optional conversion of dash to bullet
 
-    # Split paragraphs on double newlines to avoid walls of text
+    # Split paragraphs on double newlines
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     text = "\n\n".join(paragraphs)
 
-    # Now line by line keywords for highlighting
     lines = text.split("\n")
-    formatted = []
+    filtered_lines = []
     for line in lines:
         stripped = line.strip()
-        
-        # Emphasize 'From:' or 'Subject:'
+
+        # If line starts with bullet, skip it
+        if stripped.startswith("•"):
+            continue
+
+        # Additional highlights or formatting
         if "From:" in stripped or "Subject:" in stripped:
             line = f":email: *{stripped}*"
         elif "report" in stripped.lower():
@@ -95,17 +98,20 @@ def format_scenario_text(text):
               stripped.lower().startswith("what is your next move")):
             line = f"\n*{stripped}*"
 
-        formatted.append(line)
-    return "\n".join(formatted).strip()
+        filtered_lines.append(line)
+
+    return "\n".join(filtered_lines).strip()
 
 def extract_bullet_choices(text):
     """
-    Finds lines that start with "•" and returns them as a list of strings.
+    Pull bullet lines from the raw text. Example of bullet line:
+    • Click the link
     """
     lines = text.split("\n")
     choices = []
     for line in lines:
         if line.strip().startswith("•"):
+            # remove "• " from the beginning
             label = line.strip("• ").strip()
             if label:
                 choices.append(label)
@@ -114,51 +120,38 @@ def extract_bullet_choices(text):
 def truncate_label(label, limit=35):
     """
     Shortens a label for Slack button if it's too long,
-    but we pass the full text via 'value' below.
+    but pass the full text via 'value' to Gemini.
     """
     return (label[:limit - 1] + "…") if len(label) > limit else label
 
 ##########################################
-# 4. Build Slack Blocks (Story + ChoiceList + Buttons)
+# 4. Build Slack Blocks
 ##########################################
 def build_slack_blocks(raw_reply):
-    # 1) Separate the scenario text from the bullet lines
+    # Format scenario text (removing bullet lines)
     scenario_text = format_scenario_text(raw_reply)
+    # Extract bullet lines for building clickable buttons
     choice_list = extract_bullet_choices(raw_reply)
 
-    # 2) Build main scenario block
+    # Main scenario block
     scenario_block = {
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": scenario_text if scenario_text else "_No scenario text found._"
+            "text": scenario_text if scenario_text else "_(No scenario text)_"
         }
     }
 
-    # 3) Build a separate block showing the bullet choices in full
-    # (only if we have at least one choice)
-    choice_list_block = None
-    if choice_list:
-        # Join them in a single string with newline
-        bullet_text = "\n".join(f"• {c}" for c in choice_list)
-        choice_list_block = {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Here are your options:*\n{bullet_text}"
-            }
-        }
-
-    # 4) Build short-labeled buttons
+    # Buttons block
     buttons = []
     for i, full_choice in enumerate(choice_list[:5]):
         buttons.append({
             "type": "button",
             "text": {
                 "type": "plain_text",
-                "text": truncate_label(full_choice)  
+                "text": truncate_label(full_choice)
             },
-            "value": full_choice,  # pass full text to the backend
+            "value": full_choice,  # pass entire label to the backend
             "action_id": f"choice_{i}"
         })
 
@@ -167,13 +160,7 @@ def build_slack_blocks(raw_reply):
         "elements": buttons
     }
 
-    # 5) Combine the blocks in order: scenario, (optional) choice list, actions
-    blocks = [scenario_block]
-    if choice_list_block:
-        blocks.append(choice_list_block)
-    blocks.append(actions_block)
-
-    return blocks
+    return [scenario_block, actions_block]
 
 ##########################################
 # 5. Slack Endpoints
@@ -195,7 +182,6 @@ def handle_gemini_response(response_url, user_input, user_id):
     raw_reply = call_gemini_flash(user_input, user_id)
     blocks = build_slack_blocks(raw_reply)
 
-    # Post the final blocks
     requests.post(response_url, json={
         "response_type": "in_channel",
         "blocks": blocks
@@ -210,6 +196,7 @@ def slack_interactive():
     user_id = data["user"]["id"]
     response_url = data["response_url"]
 
+    # pass user choice to Gemini
     raw_reply = call_gemini_flash(choice, user_id)
     blocks = build_slack_blocks(raw_reply)
 
