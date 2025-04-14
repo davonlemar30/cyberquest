@@ -120,7 +120,10 @@ def build_slack_blocks(formatted_reply, choices):
     for i, choice in enumerate(choices[:5]):
         buttons.append({
             "type": "button",
-            "text": { "type": "plain_text", "text": choice },
+            "text": {
+    "type": "plain_text",
+    "text": (choice[:32] + "…") if len(choice) > 35 else choice
+},
             "action_id": f"choice_{i}",
             "value": choice
         })
