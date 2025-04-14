@@ -10,7 +10,9 @@ from google.oauth2 import service_account
 app = Flask(__name__)
 chat_sessions = {}
 
-# 🔐 Load credentials from base64 JSON (Render ENV)
+##########################################
+# 1. Load Credentials & Configure Gemini
+##########################################
 def get_google_credentials():
     encoded = os.getenv("GEMINI_SERVICE_ACCOUNT")
     if not encoded:
@@ -21,19 +23,20 @@ def get_google_credentials():
         scopes=["https://www.googleapis.com/auth/generative-language"]
     )
 
-# 🔁 Initialize Gemini client once
 credentials = get_google_credentials()
 genai.configure(credentials=credentials)
 
-# 💬 Manage conversation sessions
+##########################################
+# 2. Chat Session Management
+##########################################
 def get_chat_session(conversation_id):
     if conversation_id not in chat_sessions:
         session = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
             history=[
-    {
-        "role": "user",
-        "parts": [
-            """You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*.
+                {
+                    "role": "user",
+                    "parts": [
+                        """You are the narrator of a Slack-based cybersecurity text adventure game called *CyberQuest*.
 
 Respond with short, Slack-formatted messages that simulate common security situations. The user works at a company called Microcom. They might receive suspicious emails, links, files, or messages that test their ability to spot red flags.
 
@@ -42,15 +45,13 @@ Use simple language. Never assume technical knowledge. Always explain the risk t
 At the end of each message, include 2 to 4 action choices beginning with a bullet (•). NEVER write a wall of text.
 
 Do not use job titles. Just make it feel like the user is someone working at Microcom handling their daily routine."""
-        ]
-    }
-]
-
+                    ]
+                }
+            ]
         )
         chat_sessions[conversation_id] = session
     return chat_sessions[conversation_id]
 
-# 🧠 Gemini interaction
 def call_gemini_flash(user_input, conversation_id):
     try:
         session = get_chat_session(conversation_id)
@@ -60,51 +61,47 @@ def call_gemini_flash(user_input, conversation_id):
     except Exception as e:
         return f"⚠️ Gemini Error: {e}"
 
-# 🔤 Format Gemini text for Slack
-def format_for_slack(text):
-    # Replace markdown headers
-    text = text.replace("**", "*").replace("##", "*")
-    
-    # Normalize list markers: convert hyphens to bullet points.
-    text = text.replace(" - ", "• ")
+##########################################
+# 3. Formatting Logic
+##########################################
+def format_scenario_text(text):
+    """
+    Formats the main scenario text for Slack (minus bullets).
+    We'll keep bullet lines separate as a 'Choice List' block.
+    """
+    # Basic cleanup
+    text = text.replace("**", "*").replace("##", "*").replace("  ", " ")
+    text = text.replace(" - ", "• ")  # If you want bullet conversions in normal text
 
-    # Normalize extra spaces
-    text = text.replace("  ", " ")
-
-    # Split text into paragraphs by double newline, then recombine with an extra newline.
-    paragraphs = text.split("\n\n")
-    paragraphs = [para.strip() for para in paragraphs if para.strip()]
+    # Split paragraphs on double newlines to avoid walls of text
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     text = "\n\n".join(paragraphs)
 
-    # Now process each line to add emoji or highlights based on keywords.
+    # Now line by line keywords for highlighting
     lines = text.split("\n")
     formatted = []
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("•"):
-            # Skip the bullet lines so they show only as buttons.
-            continue
-        elif "From:" in stripped or "Subject:" in stripped:
-            # Emphasize these headers.
+        
+        # Emphasize 'From:' or 'Subject:'
+        if "From:" in stripped or "Subject:" in stripped:
             line = f":email: *{stripped}*"
-        elif "IP" in stripped or "192." in stripped:
-            line = f":mag_right: `{stripped}`"
         elif "report" in stripped.lower():
             line = f":warning: {stripped}"
+        elif "IP" in stripped or "192." in stripped:
+            line = f":mag_right: `{stripped}`"
         elif (stripped.lower().startswith("what do you") or 
               stripped.lower().startswith("what’s next") or 
               stripped.lower().startswith("what is your next move")):
-            # Make the question stand out on a new line.
             line = f"\n*{stripped}*"
+
         formatted.append(line)
-    
-    # Join with newlines
     return "\n".join(formatted).strip()
 
-
-
-# 🟡 Extract choices from Gemini response
-def extract_choices(text):
+def extract_bullet_choices(text):
+    """
+    Finds lines that start with "•" and returns them as a list of strings.
+    """
     lines = text.split("\n")
     choices = []
     for line in lines:
@@ -114,31 +111,73 @@ def extract_choices(text):
                 choices.append(label)
     return choices
 
-# 🔳 Build Slack button blocks
-def build_slack_blocks(formatted_reply, choices):
+def truncate_label(label, limit=35):
+    """
+    Shortens a label for Slack button if it's too long,
+    but we pass the full text via 'value' below.
+    """
+    return (label[:limit - 1] + "…") if len(label) > limit else label
+
+##########################################
+# 4. Build Slack Blocks (Story + ChoiceList + Buttons)
+##########################################
+def build_slack_blocks(raw_reply):
+    # 1) Separate the scenario text from the bullet lines
+    scenario_text = format_scenario_text(raw_reply)
+    choice_list = extract_bullet_choices(raw_reply)
+
+    # 2) Build main scenario block
+    scenario_block = {
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": scenario_text if scenario_text else "_No scenario text found._"
+        }
+    }
+
+    # 3) Build a separate block showing the bullet choices in full
+    # (only if we have at least one choice)
+    choice_list_block = None
+    if choice_list:
+        # Join them in a single string with newline
+        bullet_text = "\n".join(f"• {c}" for c in choice_list)
+        choice_list_block = {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Here are your options:*\n{bullet_text}"
+            }
+        }
+
+    # 4) Build short-labeled buttons
     buttons = []
-    for i, choice in enumerate(choices[:5]):
+    for i, full_choice in enumerate(choice_list[:5]):
         buttons.append({
             "type": "button",
             "text": {
-    "type": "plain_text",
-    "text": (choice[:32] + "…") if len(choice) > 35 else choice
-},
-            "action_id": f"choice_{i}",
-            "value": choice
+                "type": "plain_text",
+                "text": truncate_label(full_choice)  
+            },
+            "value": full_choice,  # pass full text to the backend
+            "action_id": f"choice_{i}"
         })
-    return [
-        {
-            "type": "section",
-            "text": { "type": "mrkdwn", "text": formatted_reply }
-        },
-        {
-            "type": "actions",
-            "elements": buttons
-        }
-    ]
 
-# 🚪 Slash command entrypoint
+    actions_block = {
+        "type": "actions",
+        "elements": buttons
+    }
+
+    # 5) Combine the blocks in order: scenario, (optional) choice list, actions
+    blocks = [scenario_block]
+    if choice_list_block:
+        blocks.append(choice_list_block)
+    blocks.append(actions_block)
+
+    return blocks
+
+##########################################
+# 5. Slack Endpoints
+##########################################
 @app.route("/cyberquest", methods=["POST"])
 def cyberquest():
     user_input = request.form.get("text")
@@ -152,19 +191,16 @@ def cyberquest():
         "text": "🧠 Processing your CyberQuest move..."
     })
 
-# 🧵 Handles Slack slash command async
 def handle_gemini_response(response_url, user_input, user_id):
     raw_reply = call_gemini_flash(user_input, user_id)
-    formatted_reply = format_for_slack(raw_reply)
-    choices = extract_choices(raw_reply)
-    blocks = build_slack_blocks(formatted_reply, choices)
+    blocks = build_slack_blocks(raw_reply)
 
+    # Post the final blocks
     requests.post(response_url, json={
         "response_type": "in_channel",
         "blocks": blocks
     })
 
-# 📥 Slack Interactivity Endpoint
 @app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
     payload = request.form.get("payload")
@@ -174,10 +210,8 @@ def slack_interactive():
     user_id = data["user"]["id"]
     response_url = data["response_url"]
 
-    reply = call_gemini_flash(choice, user_id)
-    formatted_reply = format_for_slack(reply)
-    choices = extract_choices(reply)
-    blocks = build_slack_blocks(formatted_reply, choices)
+    raw_reply = call_gemini_flash(choice, user_id)
+    blocks = build_slack_blocks(raw_reply)
 
     requests.post(response_url, json={
         "response_type": "in_channel",
