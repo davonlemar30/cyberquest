@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import os
 import requests
-import threading
 import base64
 import json
 import google.generativeai as genai
@@ -31,21 +30,20 @@ genai.configure(credentials=credentials)
 ##########################################
 def get_chat_session(conversation_id):
     """
-    Creates or returns an existing Gemini chat session for the user.
-    Also initializes a 'score' if not already present.
+    Returns an existing session or creates a new one if user_id not in chat_sessions.
+    Each session is tied to the user and also tracks a 'score'.
     """
     if conversation_id not in chat_sessions:
-        # Start a fresh conversation with a short introduction
+        # Start a fresh conversation with a short intro
         session = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
             history=[
                 {
                     "role": "user",
-                    "parts": ["""
-Welcome to *CyberQuest: Security Training!* 
-You will receive short, realistic cybersecurity scenarios relevant to Microcom. 
-At the end, provide a few bullet choices (2 to 4) for how to respond.
-All messaging is ephemeral (private) to the user.
-"""]
+                    "parts": [
+                        """Welcome to *CyberQuest: Security Training!* 
+Keep all responses short and realistic. Provide 2-4 bullet actions at the end of each scenario. 
+All messaging is ephemeral, so only the user sees it."""
+                    ]
                 }
             ]
         )
@@ -57,12 +55,13 @@ All messaging is ephemeral (private) to the user.
 
 def call_gemini_flash(user_input, conversation_id):
     """
-    Sends user_input to the user's Gemini chat session and returns the response text.
+    Passes user_input to Gemini for that user's session.
+    Logs raw text for debugging.
     """
     try:
         session = get_chat_session(conversation_id)
         response = session.send_message(user_input)
-        print("Gemini response raw:", response.text)  # Debug print
+        print("Gemini response raw:", response.text)  # for debugging
         return response.text
     except Exception as e:
         return f"⚠️ Gemini Error: {e}"
@@ -72,12 +71,11 @@ def call_gemini_flash(user_input, conversation_id):
 ##########################################
 def format_scenario_text(text):
     """
-    Clean up the scenario text, removing bullet lines (we turn them into Slack buttons).
-    Also does minor Slack formatting for From:/Subject:/report, etc.
+    Removes bullet lines (we turn them into Slack buttons).
+    Slack-ifies 'From:' and 'Subject:' lines, etc.
     """
     text = text.replace("**", "*").replace("##", "*").replace("  ", " ")
     text = text.replace(" - ", "• ")
-
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     text = "\n\n".join(paragraphs)
 
@@ -85,7 +83,7 @@ def format_scenario_text(text):
     filtered_lines = []
     for line in lines:
         stripped = line.strip()
-        # Skip bullet lines, since we add them as Slack buttons
+        # skip bullet lines
         if stripped.startswith("•"):
             continue
         if "From:" in stripped or "Subject:" in stripped:
@@ -104,8 +102,8 @@ def format_scenario_text(text):
 
 def extract_bullet_choices(text, limit=40):
     """
-    Finds bullet lines starting with '•' and returns them as a list of short labels.
-    Example: '• Report the email' -> 'Report the email'
+    Finds lines like '• Click the link' => 'Click the link'
+    Also shortens them if they exceed length limit.
     """
     lines = text.split("\n")
     choices = []
@@ -114,7 +112,6 @@ def extract_bullet_choices(text, limit=40):
             label = line.strip("• ").strip()
             if label:
                 if len(label) > limit:
-                    # forcibly shorten if too long
                     label = label.split()[0:6]
                     label = " ".join(label).strip(" .")
                 choices.append(label)
@@ -122,18 +119,14 @@ def extract_bullet_choices(text, limit=40):
 
 def truncate_label(label, limit=35):
     """
-    Slack buttons get visually truncated ~35 chars, so let's cut them safely here.
+    Slack button text can visually truncate. We do it ourselves for clarity.
     """
     return (label[:limit - 1] + "…") if len(label) > limit else label
 
 ##########################################
-# 4. Build Slack Blocks (Scenario + Score + Button Rows)
+# 4. Build Slack Blocks
 ##########################################
 def build_slack_blocks(raw_reply, score=0):
-    """
-    Takes Gemini's raw reply + user's current score,
-    returns an array of Slack block kit structures.
-    """
     scenario_text = format_scenario_text(raw_reply)
     choice_list = extract_bullet_choices(raw_reply)
 
@@ -155,6 +148,7 @@ def build_slack_blocks(raw_reply, score=0):
         ]
     }
 
+    # Buttons from bullet lines
     buttons = []
     for i, full_choice in enumerate(choice_list[:5]):
         buttons.append({
@@ -175,20 +169,20 @@ def build_slack_blocks(raw_reply, score=0):
     return [scenario_block, score_block, actions_block]
 
 ##########################################
-# 5. Slack Endpoints
+# 5. Slack Endpoints (All ephemeral)
 ##########################################
 
 @app.route("/cyberquest", methods=["POST"])
 def cyberquest():
     """
     Slack slash command: /cyberquest
-    If user enters 'menu' or 'start', show ephemeral main menu.
-    Else, we pass the input to 'handle_gemini_response' in a background thread.
+    If user types 'menu' or 'start', show ephemeral main menu.
+    Otherwise, we run the scenario immediately (no background thread).
     """
     user_input = request.form.get("text", "").strip().lower()
     user_id = request.form.get("user_id")
-    response_url = request.form.get("response_url")
 
+    # Show ephemeral main menu if 'menu' or 'start'
     if user_input in ["menu", "start"]:
         main_menu = {
             "type": "actions",
@@ -214,7 +208,6 @@ def cyberquest():
             ]
         }
 
-        # Main menu ephemeral
         return jsonify({
             "response_type": "ephemeral",
             "blocks": [
@@ -222,41 +215,28 @@ def cyberquest():
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": "*Welcome to CyberQuest Training!* Choose an option below:"
+                        "text": "*Welcome to CyberQuest Training!* Choose an option below (ephemeral)."
                     }
                 },
                 main_menu
             ]
         })
     else:
-        # For any other text, let's run Gemini in the background
-        threading.Thread(target=handle_gemini_response, args=(response_url, user_input, user_id)).start()
+        # For other text, let's run Gemini scenario inline (no background thread).
+        raw_reply = call_gemini_flash(user_input, user_id)
+        score = chat_sessions.get(user_id, {}).get("score", 0)
+        blocks = build_slack_blocks(raw_reply, score)
 
         return jsonify({
             "response_type": "ephemeral",
-            "text": "🧠 Processing your CyberQuest move privately..."
+            "blocks": blocks
         })
-
-def handle_gemini_response(response_url, user_input, user_id):
-    """
-    Background thread handles the scenario -> ephemeral message to user.
-    """
-    raw_reply = call_gemini_flash(user_input, user_id)
-    score = chat_sessions.get(user_id, {}).get("score", 0)
-    blocks = build_slack_blocks(raw_reply, score)
-
-    # Post ephemeral scenario blocks
-    requests.post(response_url, json={
-        "response_type": "ephemeral",
-        "blocks": blocks
-    })
 
 @app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
     """
-    Slack sends button clicks here.
-    We parse the choice, update the user’s score, get new scenario from Gemini or static text,
-    then return ephemeral blocks.
+    Slack interactive endpoint for button clicks.
+    We parse the clicked value, update scenario or do special actions, then return ephemeral.
     """
     payload = request.form.get("payload")
     data = json.loads(payload)
@@ -264,25 +244,25 @@ def slack_interactive():
     choice = data["actions"][0]["value"]
     user_id = data["user"]["id"]
 
-    # update scenario or handle special cases
+    # The user might not have a session yet, so ensure it
+    get_chat_session(user_id)  # creates or returns existing
+
+    # Score logic or special commands
     if choice == "start":
-        # new user or reset user
-        chat_sessions[user_id] = {"session": get_chat_session(user_id), "score": 0}
+        chat_sessions[user_id]["score"] = 0
         raw_reply = call_gemini_flash("start training", user_id)
     elif choice == "help":
         raw_reply = (
-            "CyberQuest is a text-based security training game. "
-            "You’ll see short scenarios about suspicious emails, phishing, etc., "
-            "and choose how to respond. All messages are ephemeral, so only you see them. "
-            "Click 'Start Training' to begin!"
+            "CyberQuest is ephemeral. Each scenario is private to you. "
+            "Pick an action to respond, and we'll track your 'score' for good/bad choices. "
+            "Type `/cyberquest start` any time to restart."
         )
     elif choice == "exit":
-        raw_reply = "You've exited CyberQuest. Type `/cyberquest start` or `/cyberquest menu` to begin again."
+        raw_reply = "You've exited CyberQuest. Type `/cyberquest start` or `/cyberquest menu` to re-enter."
     else:
-        # we pass the choice as input to Gemini
+        # pass the choice text to Gemini
         raw_reply = call_gemini_flash(choice, user_id)
-
-        # Score logic: if user "report" => +1, if user "click" => -1
+        # update user score
         if "report" in choice.lower():
             chat_sessions[user_id]["score"] += 1
         elif "click" in choice.lower() or "open" in choice.lower():
@@ -291,10 +271,10 @@ def slack_interactive():
     score = chat_sessions[user_id]["score"]
     blocks = build_slack_blocks(raw_reply, score)
 
-    # Return ephemeral so only the user sees it
-    # replace_original means Slack tries to replace the previous ephemeral
+    # ephemeral response to user
     return jsonify({
         "response_type": "ephemeral",
+        # No replace_original => each response is a separate ephemeral bubble
         "blocks": blocks
     })
 
