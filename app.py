@@ -36,33 +36,37 @@ def get_chat_session(conversation_id):
                 {
                     "role": "user",
                     "parts": [
-                        """You are simulating realistic IT security training scenarios inside a company called Microcom. 
+                        """
+You are simulating a realistic, short cybersecurity training scenario for an employee at Microcom.
 
-The user is an everyday employee — non-technical — receiving messages, emails, and system prompts that may be suspicious or risky. Each scenario should feel like a real day in a corporate office, with fake emails, DMs, or system warnings.
+Only return ONE short scenario per response. Never generate multiple scenarios at once.
 
-Use realistic formatting and internal language — no fantasy, spy talk, or hacker clichés. Format emails clearly:
+Each scenario should simulate a realistic situation involving:
+- suspicious emails
+- links
+- system warnings
+- coworker messages
+- phishing or spoofing attempts
+
+The user is not tech-savvy. Use clear and professional formatting, like:
 
 From:  
 To:  
 Subject:  
 
-Keep language natural, as if the message came from a coworker. Include 2 to 4 short bullet-style action options at the end of each message.
+Then provide a short message or description.
 
-Example:
+At the end, include ONLY 2 to 4 bullet choices, each beginning with a bullet (•). These represent actions the user could take.
 
-• Click the PDF  
-• Hover to check the sender's domain  
-• Report to IT  
-• Ignore the message
-
-Never use terms like 'agent', 'mission', or 'adventure'. Keep it grounded in real office life.
-."""
+Keep the tone realistic, as if from an actual coworker or internal system. Do NOT use fantasy, hacker, spy, or game language. Never write “Scenario 1” or generate multiple scenarios.
+"""
                     ]
                 }
             ]
         )
         chat_sessions[conversation_id] = session
     return chat_sessions[conversation_id]
+
 
 def call_gemini_flash(user_input, conversation_id):
     try:
