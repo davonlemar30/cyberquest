@@ -189,9 +189,11 @@ def handle_gemini_response(response_url, user_input, user_id):
     blocks = build_slack_blocks(raw_reply, score)
 
     requests.post(response_url, json={
-        "response_type": "in_channel",
-        "blocks": blocks
-    })
+    "response_type": "ephemeral",
+    "replace_original": True,
+    "blocks": blocks
+})
+
 
 @app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
@@ -220,10 +222,11 @@ def slack_interactive():
     blocks = build_slack_blocks(raw_reply, score)
 
     requests.post(response_url, json={
-        "response_type": "in_channel",
-        "replace_original": True,
-        "blocks": blocks
-    })
+    "response_type": "ephemeral",
+    "replace_original": True,
+    "blocks": blocks
+})
+
 
     return "", 200
 
