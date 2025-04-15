@@ -193,9 +193,6 @@ def handle_gemini_response(response_url, user_input, user_id):
         "blocks": blocks
     })
 
-
-
-
 @app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
     payload = request.form.get("payload")
@@ -203,8 +200,8 @@ def slack_interactive():
 
     choice = data["actions"][0]["value"]
     user_id = data["user"]["id"]
-    response_url = data["response_url"]
 
+    # Choose scenario
     if choice == "start":
         chat_sessions[user_id] = {"session": get_chat_session(user_id), "score": 0}
         raw_reply = call_gemini_flash("start training", user_id)
@@ -222,13 +219,11 @@ def slack_interactive():
     score = chat_sessions.get(user_id, {}).get("score", 0)
     blocks = build_slack_blocks(raw_reply, score)
 
-    requests.post(response_url, json={
-        "response_type": "ephemeral",  # 👈 Update this too
+    return jsonify({
+        "response_type": "ephemeral",  # only user sees the response
+        "replace_original": True,
         "blocks": blocks
     })
-
-
-    return "", 200
 
 if __name__ == "__main__":
     app.run(debug=True)
