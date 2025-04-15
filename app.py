@@ -188,11 +188,11 @@ def handle_gemini_response(response_url, user_input, user_id):
     score = chat_sessions.get(user_id, {}).get("score", 0)
     blocks = build_slack_blocks(raw_reply, score)
 
-    requests.post(response_url, json={
-    "response_type": "ephemeral",
-    "replace_original": True,
-    "blocks": blocks
+requests.post(response_url, json={
+    "response_type": "ephemeral",  # ✅ shows only to user who clicked
+    "blocks": blocks               # ✅ replaces message body with new scenario
 })
+
 
 
 @app.route("/slack/interactive", methods=["POST"])
@@ -222,10 +222,9 @@ def slack_interactive():
     blocks = build_slack_blocks(raw_reply, score)
 
     requests.post(response_url, json={
-    "response_type": "ephemeral",
-    "replace_original": True,
-    "blocks": blocks
-})
+        "response_type": "ephemeral",  # 👈 Update this too
+        "blocks": blocks
+    })
 
 
     return "", 200
