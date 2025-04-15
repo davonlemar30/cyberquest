@@ -221,6 +221,7 @@ def slack_interactive():
 
     requests.post(response_url, json={
         "response_type": "in_channel",
+        "replace_original": True,
         "blocks": blocks
     })
 
