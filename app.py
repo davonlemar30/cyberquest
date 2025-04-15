@@ -56,7 +56,7 @@ Subject:
 
 Then provide a short message or description.
 
-At the end, include ONLY 2 to 4 bullet choices, each beginning with a bullet (•). These represent actions the user could take.
+At the end, include ONLY 3 to 4 short bullet choices (under 6 words each), each starting with a bullet (•). Make each one concise and unique.
 
 Keep the tone realistic, as if from an actual coworker or internal system. Do NOT use fantasy, hacker, spy, or game language. Never write “Scenario 1” or generate multiple scenarios.
 """
@@ -118,20 +118,20 @@ def format_scenario_text(text):
 
     return "\n".join(filtered_lines).strip()
 
-def extract_bullet_choices(text):
-    """
-    Pull bullet lines from the raw text. Example of bullet line:
-    • Click the link
-    """
+def extract_bullet_choices(text, limit=40):
     lines = text.split("\n")
     choices = []
     for line in lines:
         if line.strip().startswith("•"):
-            # remove "• " from the beginning
             label = line.strip("• ").strip()
             if label:
+                # Enforce short choices at extraction
+                if len(label) > limit:
+                    label = label.split()[0:6]  # Keep first ~6 words
+                    label = " ".join(label).strip(" .")
                 choices.append(label)
     return choices
+
 
 def truncate_label(label, limit=35):
     """
