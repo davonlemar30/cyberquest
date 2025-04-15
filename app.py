@@ -295,7 +295,6 @@ def slack_interactive():
     # replace_original means Slack tries to replace the previous ephemeral
     return jsonify({
         "response_type": "ephemeral",
-        "replace_original": True,
         "blocks": blocks
     })
 
