@@ -1,282 +1,147 @@
 from flask import Flask, request, jsonify
-import os
-import requests
-import base64
-import json
+import os, json, base64, re
 import google.generativeai as genai
 from google.oauth2 import service_account
 
 app = Flask(__name__)
-chat_sessions = {}
+chat_sessions = {}          # { user_id: {"session": gemini_chat , "score": int} }
 
-##########################################
-# 1. Load Credentials & Configure Gemini
-##########################################
+# ─────────────────── 1. Google Gemini creds ───────────────────
 def get_google_credentials():
-    encoded = os.getenv("GEMINI_SERVICE_ACCOUNT")
-    if not encoded:
-        raise Exception("Missing GEMINI_SERVICE_ACCOUNT in environment")
-    service_account_info = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    b64 = os.getenv("GEMINI_SERVICE_ACCOUNT")
+    if not b64:
+        raise RuntimeError("GEMINI_SERVICE_ACCOUNT env var missing")
+    info = json.loads(base64.b64decode(b64).decode("utf-8"))
     return service_account.Credentials.from_service_account_info(
-        service_account_info,
-        scopes=["https://www.googleapis.com/auth/generative-language"]
+        info, scopes=["https://www.googleapis.com/auth/generative-language"]
     )
 
-credentials = get_google_credentials()
-genai.configure(credentials=credentials)
+genai.configure(credentials=get_google_credentials())
 
-##########################################
-# 2. Chat Session Management
-##########################################
-def get_chat_session(conversation_id):
-    """
-    Returns an existing session or creates a new one if user_id not in chat_sessions.
-    Each session is tied to the user and also tracks a 'score'.
-    """
-    if conversation_id not in chat_sessions:
-        # Start a fresh conversation with a short intro
-        session = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
-            history=[
-                {
-                    "role": "user",
-                    "parts": [
-                        """Welcome to *CyberQuest: Security Training!* 
-Keep all responses short and realistic. Provide 2-4 bullet actions at the end of each scenario. 
-All messaging is ephemeral, so only the user sees it."""
-                    ]
-                }
-            ]
+# ─────────────────── 2. per-user chat / score ──────────────────
+def get_chat_session(uid: str):
+    if uid not in chat_sessions:
+        system_prompt = (
+            "Welcome to *CyberQuest: Security Training!* "
+            "Finish EVERY scenario with 2-4 lines that start with the bullet character • "
+            "(e.g.  '• Report to IT').  Do NOT use *, A) or 1) — only •."
         )
-        chat_sessions[conversation_id] = {
-            "session": session,
-            "score": 0
-        }
-    return chat_sessions[conversation_id]["session"]
+        chat = genai.GenerativeModel("models/gemini-1.5-flash").start_chat(
+            history=[{"role": "user", "parts": [system_prompt]}]
+        )
+        chat_sessions[uid] = {"session": chat, "score": 0}
+    return chat_sessions[uid]["session"]
 
-def call_gemini_flash(user_input, conversation_id):
-    """
-    Passes user_input to Gemini for that user's session.
-    Logs raw text for debugging.
-    """
-    try:
-        session = get_chat_session(conversation_id)
-        response = session.send_message(user_input)
-        print("Gemini response raw:", response.text)  # for debugging
-        return response.text
-    except Exception as e:
-        return f"⚠️ Gemini Error: {e}"
+def gemini_reply(prompt: str, uid: str) -> str:
+    resp = get_chat_session(uid).send_message(prompt)
+    print("Gemini raw:", resp.text)        # render log
+    return resp.text
 
-##########################################
-# 3. Formatting & Extraction
-##########################################
-def format_scenario_text(text):
-    """
-    Removes bullet lines (we turn them into Slack buttons).
-    Slack-ifies 'From:' and 'Subject:' lines, etc.
-    """
-    text = text.replace("**", "*").replace("##", "*").replace("  ", " ")
-    text = text.replace(" - ", "• ")
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    text = "\n\n".join(paragraphs)
-
-    lines = text.split("\n")
-    filtered_lines = []
-    for line in lines:
-        stripped = line.strip()
-        # skip bullet lines
-        if stripped.startswith("•"):
+# ─────────────────── 3. helpers: text → slack ─────────────────
+def format_scenario(txt: str) -> str:
+    txt = txt.replace("**", "*").replace("##", "*").replace("  ", " ").replace(" - ", "• ")
+    out = []
+    for ln in txt.splitlines():
+        s = ln.strip()
+        if s.startswith("•"):           # bullets become buttons, skip here
             continue
-        if "From:" in stripped or "Subject:" in stripped:
-            line = f":email: *{stripped}*"
-        elif "report" in stripped.lower():
-            line = f":warning: {stripped}"
-        elif "IP" in stripped or "192." in stripped:
-            line = f":mag_right: `{stripped}`"
-        elif (stripped.lower().startswith("what do you") or
-              stripped.lower().startswith("what’s next") or
-              stripped.lower().startswith("what is your next move")):
-            line = f"\n*{stripped}*"
-        filtered_lines.append(line)
+        if s.lower().startswith(("from:", "subject:")):
+            s = f":email: *{s}*"
+        out.append(s)
+    return "\n".join(out).strip()
 
-    return "\n".join(filtered_lines).strip()
+bullet_pat = re.compile(r"^(?:•|\*|[A-Da-d]\)|\d+\))\s*(.+)$")   # ← added \*
 
-def extract_bullet_choices(text, limit=40):
-    """
-    Finds lines like '• Click the link' => 'Click the link'
-    Also shortens them if they exceed length limit.
-    """
-    lines = text.split("\n")
+def extract_choices(txt: str, limit=40):
     choices = []
-    for line in lines:
-        if line.strip().startswith("•"):
-            label = line.strip("• ").strip()
-            if label:
-                if len(label) > limit:
-                    label = label.split()[0:6]
-                    label = " ".join(label).strip(" .")
-                choices.append(label)
-    return choices
+    for ln in txt.splitlines():
+        m = bullet_pat.match(ln.strip())
+        if not m:
+            continue
+        lbl = m.group(1).strip()
+        if len(lbl) > limit:
+            lbl = " ".join(lbl.split()[:6]) + "…"
+        choices.append(lbl)
+    return choices[:5]
 
-def truncate_label(label, limit=35):
-    """
-    Slack button text can visually truncate. We do it ourselves for clarity.
-    """
-    return (label[:limit - 1] + "…") if len(label) > limit else label
+def build_blocks(raw: str, score: int):
+    scenario = format_scenario(raw)
+    choices = extract_choices(raw)
 
-##########################################
-# 4. Build Slack Blocks
-##########################################
-def build_slack_blocks(raw_reply, score=0):
-    scenario_text = format_scenario_text(raw_reply)
-    choice_list = extract_bullet_choices(raw_reply)
+    blocks = [
+        {"type":"section","text":{"type":"mrkdwn","text": scenario or "_(no text)_" }},
+        {"type":"context","elements":[{"type":"mrkdwn","text":f"*Score:* {score}"}]}
+    ]
 
-    scenario_block = {
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": scenario_text if scenario_text else "_(No scenario text)_"
-        }
-    }
+    # ensure Slack always gets at least one button
+    if not choices:
+        choices = ["Continue"]
 
-    score_block = {
-        "type": "context",
-        "elements": [
-            {
-                "type": "mrkdwn",
-                "text": f"*Score:* {score}"
-            }
+    blocks.append({
+        "type":"actions",
+        "elements":[
+            {"type":"button","text":{"type":"plain_text","text":c},
+             "value":c,"action_id":f"choice_{i}"}
+            for i, c in enumerate(choices)
         ]
-    }
+    })
+    return blocks
 
-    # Buttons from bullet lines
-    buttons = []
-    for i, full_choice in enumerate(choice_list[:5]):
-        buttons.append({
-            "type": "button",
-            "text": {
-                "type": "plain_text",
-                "text": truncate_label(full_choice)
-            },
-            "value": full_choice,
-            "action_id": f"choice_{i}"
-        })
-
-    actions_block = {
-        "type": "actions",
-        "elements": buttons
-    }
-
-    return [scenario_block, score_block, actions_block]
-
-##########################################
-# 5. Slack Endpoints (All ephemeral)
-##########################################
-
+# ─────────────────── 4. /cyberquest slash cmd ─────────────────
 @app.route("/cyberquest", methods=["POST"])
-def cyberquest():
-    """
-    Slack slash command: /cyberquest
-    If user types 'menu' or 'start', show ephemeral main menu.
-    Otherwise, we run the scenario immediately (no background thread).
-    """
-    user_input = request.form.get("text", "").strip().lower()
-    user_id = request.form.get("user_id")
+def slash():
+    cmd = request.form.get("text","").lower().strip()
+    uid = request.form["user_id"]
 
-    # Show ephemeral main menu if 'menu' or 'start'
-    if user_input in ["menu", "start"]:
-        main_menu = {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Start Training"},
-                    "value": "start",
-                    "action_id": "start_training"
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "How to Play"},
-                    "value": "help",
-                    "action_id": "how_to_play"
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Exit"},
-                    "value": "exit",
-                    "action_id": "exit_game"
-                }
+    # main menu
+    if cmd in {"", "menu", "start"}:
+        menu = {
+            "type":"actions","elements":[
+                {"type":"button","text":{"type":"plain_text","text":"Start Training"},
+                 "value":"start","action_id":"start"},
+                {"type":"button","text":{"type":"plain_text","text":"How to Play"},
+                 "value":"help","action_id":"help"},
+                {"type":"button","text":{"type":"plain_text","text":"Exit"},
+                 "value":"exit","action_id":"exit"}
             ]
         }
+        return jsonify({"response_type":"ephemeral",
+                        "blocks":[{"type":"section","text":{"type":"mrkdwn",
+                        "text":"*CyberQuest* — choose an option:"}}, menu]})
 
-        return jsonify({
-            "response_type": "ephemeral",
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "*Welcome to CyberQuest Training!* Choose an option below (ephemeral)."
-                    }
-                },
-                main_menu
-            ]
-        })
-    else:
-        # For other text, let's run Gemini scenario inline (no background thread).
-        raw_reply = call_gemini_flash(user_input, user_id)
-        score = chat_sessions.get(user_id, {}).get("score", 0)
-        blocks = build_slack_blocks(raw_reply, score)
+    # free-text direct to Gemini
+    raw = gemini_reply(cmd, uid)
+    blocks = build_blocks(raw, chat_sessions.get(uid,{}).get("score",0))
+    return jsonify({"response_type":"ephemeral","blocks":blocks})
 
-        return jsonify({
-            "response_type": "ephemeral",
-            "blocks": blocks
-        })
-
+# ─────────────────── 5. button clicks ─────────────────────────
 @app.route("/slack/interactive", methods=["POST"])
-def slack_interactive():
-    """
-    Slack interactive endpoint for button clicks.
-    We parse the clicked value, update scenario or do special actions, then return ephemeral.
-    """
-    payload = request.form.get("payload")
-    data = json.loads(payload)
+def interactive():
+    data = json.loads(request.form["payload"])
+    uid     = data["user"]["id"]
+    choice  = data["actions"][0]["value"]
 
-    choice = data["actions"][0]["value"]
-    user_id = data["user"]["id"]
+    get_chat_session(uid)                     # ensure session exists
 
-    # The user might not have a session yet, so ensure it
-    get_chat_session(user_id)  # creates or returns existing
-
-    # Score logic or special commands
+    # menu buttons
     if choice == "start":
-        chat_sessions[user_id]["score"] = 0
-        raw_reply = call_gemini_flash("start training", user_id)
+        chat_sessions[uid]["score"] = 0
+        raw = gemini_reply("start training", uid)
     elif choice == "help":
-        raw_reply = (
-            "CyberQuest is ephemeral. Each scenario is private to you. "
-            "Pick an action to respond, and we'll track your 'score' for good/bad choices. "
-            "Type `/cyberquest start` any time to restart."
-        )
+        raw = ("Each scenario is *private* to you. Click a button to act. "
+               "Good security choices raise your score.")
     elif choice == "exit":
-        raw_reply = "You've exited CyberQuest. Type `/cyberquest start` or `/cyberquest menu` to re-enter."
+        raw = "Exited CyberQuest. Use `/cyberquest start` to return."
     else:
-        # pass the choice text to Gemini
-        raw_reply = call_gemini_flash(choice, user_id)
-        # update user score
+        raw = gemini_reply(choice, uid)
         if "report" in choice.lower():
-            chat_sessions[user_id]["score"] += 1
-        elif "click" in choice.lower() or "open" in choice.lower():
-            chat_sessions[user_id]["score"] -= 1
+            chat_sessions[uid]["score"] += 1
+        elif any(k in choice.lower() for k in ("click", "open")):
+            chat_sessions[uid]["score"] -= 1
 
-    score = chat_sessions[user_id]["score"]
-    blocks = build_slack_blocks(raw_reply, score)
+    blocks = build_blocks(raw, chat_sessions[uid]["score"])
+    return jsonify({"response_type":"ephemeral","blocks":blocks})
 
-    # ephemeral response to user
-    return jsonify({
-        "response_type": "ephemeral",
-        # No replace_original => each response is a separate ephemeral bubble
-        "blocks": blocks
-    })
-
+# ─────────────────── 6. run local ─────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)
