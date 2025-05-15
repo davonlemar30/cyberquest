@@ -27,8 +27,9 @@ genai.configure(credentials=get_google_credentials())
 def get_chat(uid: str):
     if uid not in chat_sessions:
         system = (
-            "Welcome to *CyberQuest: Security Training*!  "
+            "Welcome to *Cyber Security Training*!  "
             "Each scenario ends with 2–4 lines that start with • (bullet)."
+            "Each bullet choice must be 20 characters or fewer."
         )
         sess = genai.GenerativeModel("models/gemini-1.5-flash")\
                   .start_chat(history=[{"role":"user","parts":[system]}])
