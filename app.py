@@ -16,7 +16,8 @@ def get_google_credentials():
         raise RuntimeError("Missing GEMINI_SERVICE_ACCOUNT")
     info = json.loads(base64.b64decode(b64).decode())
     return service_account.Credentials.from_service_account_info(
-        info, scopes=["https://www.googleapis.com/auth/generative-language"]
+        info,
+        scopes=["https://www.googleapis.com/auth/generative-language"]
     )
 
 genai.configure(credentials=get_google_credentials())
@@ -29,29 +30,32 @@ def get_chat(uid: str):
         system = (
             "You are running a corporate-style security training called CyberQuest for Microcom employees.\n"
             "Each response must contain exactly one realistic scenario, then **four** lettered options:\n"
-            "A) …\nB) …\nC) …\nD) …\n"
-            "Then stop and wait for user to pick A, B, C, or D.\n"
+            "A) …\n"
+            "B) …\n"
+            "C) …\n"
+            "D) …\n"
+            "Then stop and wait for the user to pick A, B, C, or D.\n"
             "After they click, you will reply “Correct” or “Incorrect” and only then proceed on “Next Scenario.”"
         )
         sess = genai.GenerativeModel("models/gemini-1.5-flash") \
-                    .start_chat(history=[{"role": "user", "parts": [system]}])
+                  .start_chat(history=[{"role": "user", "parts": [system]}])
         chat_sessions[uid] = {"session": sess, "score": 0}
     return chat_sessions[uid]["session"]
 
 def ask_gemini(prompt: str, uid: str) -> str:
+    """Send prompt to Gemini and return its raw text."""
     txt = get_chat(uid).send_message(prompt).text
-    print("Gemini raw:", txt)  # for Render logs
+    print("Gemini raw:", txt)  # for debugging in your Render logs
     return txt
 
 # ─────────────────────────────────────────
 # 3. Helpers → Slack Blocks
 # ─────────────────────────────────────────
 def format_body(txt: str) -> str:
-    # leave A)/B)/C)/D) lines in place; skip any stray bullets
+    """Keep A)/B)/C)/D) lines; strip any stray • bullets."""
     out = []
     for ln in txt.splitlines():
         s = ln.rstrip()
-        # skip stray bullets
         if s.startswith("•"):
             continue
         if s.lower().startswith(("from:", "subject:")):
@@ -59,24 +63,27 @@ def format_body(txt: str) -> str:
         out.append(s)
     return "\n".join(out).strip() or "_(no text)_"
 
-# match “A) text”
 LETTER_RE = re.compile(r"^([A-D])\)\s*(.+)$")
 
 def extract_choices(txt: str):
+    """
+    Find lines like "A) Click the link…" → [("A","Click the link…"), ...]
+    Fallback to a single A) Continue if none found.
+    """
     cs = []
     for ln in txt.splitlines():
         m = LETTER_RE.match(ln.strip())
         if m:
             letter, label = m.groups()
             cs.append((letter, label.strip()))
-    # fallback if none found
-    return cs or [("A", "Continue")]
+    return cs if cs else [("A", "Continue")]
 
 def build_blocks(raw: str, score: int):
-    body = format_body(raw)
+    """Turn raw Gemini text + score into Slack blocks with A/B/C/D buttons."""
+    body   = format_body(raw)
     choices = extract_choices(raw)
 
-    blocks = [
+    return [
         {"type": "section", "text": {"type": "mrkdwn", "text": body}},
         {"type": "context", "elements": [
             {"type": "mrkdwn", "text": f"*Score:* {score}"}
@@ -91,7 +98,6 @@ def build_blocks(raw: str, score: int):
             for letter, _ in choices
         ]}
     ]
-    return blocks
 
 # ─────────────────────────────────────────
 # 4. Slash Command Handler
@@ -101,7 +107,7 @@ def slash():
     uid = request.form["user_id"]
     cmd = request.form.get("text", "").strip().lower()
 
-    # show main menu
+    #  — Main menu —
     if cmd in ("", "menu", "start"):
         menu = {
             "type": "actions", "elements": [
@@ -115,7 +121,7 @@ def slash():
         }
         return jsonify({
             "response_type": "ephemeral",
-            "text": "_",  # fallback
+            "text": "_",  # fallback for clients that don’t render blocks
             "blocks": [
                 {"type":"section","text":{"type":"mrkdwn",
                  "text":"*CyberQuest* — choose an option:"}},
@@ -123,14 +129,14 @@ def slash():
             ]
         })
 
-    # free-text into Gemini for custom prompts
-    raw = ask_gemini(cmd, uid)
+    #  — Free-text into Gemini —
+    raw    = ask_gemini(cmd, uid)
     blocks = build_blocks(raw, chat_sessions[uid]["score"])
     return jsonify({
-        "response_type": "ephemeral",
-        "text": "_",
+        "response_type":    "ephemeral",
+        "text":             "_",
         "replace_original": False,
-        "blocks": blocks
+        "blocks":           blocks
     })
 
 # ─────────────────────────────────────────
@@ -146,28 +152,33 @@ def interactive():
     # ensure session exists
     get_chat(uid)
 
-    # handle menu
+    # — Menu buttons —
     if choice == "start":
         chat_sessions[uid]["score"] = 0
         raw = ask_gemini("start training", uid)
+
     elif choice == "help":
         raw = (
-            "CyberQuest is completely private (ephemeral).  "
-            "Each scenario ends in A), B), C), D).  "
+            "CyberQuest is completely private (ephemeral).\n"
+            "Each scenario ends in A), B), C), D).\n"
             "Click your letter to respond; correct answers raise your score."
         )
+
     elif choice == "exit":
-        raw = "You’ve exited CyberQuest.  Use `/cyberquest start` to return anytime."
+        raw = "You’ve exited CyberQuest. Use `/cyberquest start` to return anytime."
+
+    # — A/B/C/D response —
     else:
-        # send letter back to Gemini
+        # tell Gemini which letter you picked
         raw = ask_gemini(f"I choose {choice}", uid)
-        # bump score if Gemini says “Correct”
-        if raw.lower().startswith("correct"):
+
+        # if Gemini replies “Correct…” bump the score
+        if raw.strip().lower().startswith("correct"):
             chat_sessions[uid]["score"] += 1
 
     blocks = build_blocks(raw, chat_sessions[uid]["score"])
 
-    # update the ephemeral message in-place
+    # update the same ephemeral message in-place
     requests.post(resp_url, json={
         "response_type":    "ephemeral",
         "replace_original": True,
