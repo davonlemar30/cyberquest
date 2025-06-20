@@ -8,6 +8,10 @@ from flask import Flask, request
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 
+# In-memory store of active quizzes: user_id → {q_idx, correct, wrong}
+sessions: dict[str, dict[str, int]] = {}
+
+
 # ── LOAD QUESTIONS ───────────────────────────────────────────
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions.json")
 with open(QUESTIONS_PATH, "r") as f:
@@ -92,62 +96,113 @@ def handle_start(ack, respond, command):
 @app.action("start_game_click")
 def handle_start_click(ack, body, respond):
     ack()
-    # Choose a random question index
-    q_idx = random.randrange(len(QUESTIONS))
-    # Build & send first question
-    blocks = build_question_blocks(q_idx, 0, 0)
-    respond(replace_original=True, blocks=blocks, text=QUESTIONS[q_idx]["q"])
+    user = body["user"]["id"]
+    # initialize a new session for this user
+    sessions[user] = {
+        "q_idx": random.randrange(len(QUESTIONS)),
+        "correct": 0,
+        "wrong": 0
+    }
+    state = sessions[user]
+    blocks = build_question_blocks(
+        state["q_idx"],
+        state["correct"],
+        state["wrong"]
+    )
+    respond(
+        replace_original=True,
+        blocks=blocks,
+        text=QUESTIONS[state["q_idx"]]["q"]
+    )
 
 # ── ANSWER BUTTONS ───────────────────────────────────────────
 @app.action(re.compile(r"^answer_[a-z]$"))
 def handle_answer(ack, body, respond):
     ack()
-    data      = json.loads(body["actions"][0]["value"])
-    q_idx     = int(data["q"])
-    answer_id = data["answer"]
-    correct   = int(data["c"])
-    wrong     = int(data["w"])
+    user = body["user"]["id"]
+    # load session
+    state = sessions.get(user)
+    if not state:
+        # no session? ask them to start again
+        return respond(text="❗ No active game. Type `/start` to begin.")
 
-    # Evaluate
+    # unpack
+    q_idx   = state["q_idx"]
+    correct = state["correct"]
+    wrong   = state["wrong"]
+
+    # get their choice
+    data      = json.loads(body["actions"][0]["value"])
+    answer_id = data["answer"]
+
+    # evaluate
     q   = QUESTIONS[q_idx % len(QUESTIONS)]
     opt = next(o for o in q["options"] if o["id"] == answer_id)
-    correct += int(opt["ok"])
-    wrong   += int(not opt["ok"])
+    if opt["ok"]:
+        correct += 1
+    else:
+        wrong   += 1
 
-    # Win/Lose
+    # store back
+    state["correct"] = correct
+    state["wrong"]   = wrong
+
+    # Win / Lose?
     if correct >= WIN_AT:
-        return respond(replace_original=True, text=f"🏆 You win with {correct} correct!")
+        # clear session
+        del sessions[user]
+        return respond(
+            replace_original=True,
+            text=f"🏆 *You win!* {correct}/{WIN_AT} correct. Type `/start` to play again."
+        )
     if wrong >= LOSE_AT:
-        return respond(replace_original=True, text=f"💀 Game over with {wrong} wrong.")
+        del sessions[user]
+        return respond(
+            replace_original=True,
+            text=f"💀 *Game over!* {wrong}/{LOSE_AT} wrong. Type `/start` to try again."
+        )
 
-    # Feedback + Next
-    feedback = (
-        f"*{'✅ Correct!' if opt['ok'] else '❌ Incorrect.'}*\n{opt['why']}"
-    )
+    # otherwise, show feedback + Next
     feedback_blocks = [
-        {"type": "section", "text": {"type": "mrkdwn", "text": feedback}},
-        {"type": "actions", "elements": [
-            {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "Next ▶️"},
-                "action_id": "next_click",
-                "value": json.dumps({"next": q_idx+1, "c": correct, "w": wrong})
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{'✅ Correct!' if opt['ok'] else '❌ Incorrect.'}*\n{opt['why']}"
             }
-        ]}
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Next ▶️"},
+                    "action_id": "next_click"
+                }
+            ]
+        }
     ]
     respond(replace_original=True, blocks=feedback_blocks)
+
 
 # ── NEXT BUTTON ──────────────────────────────────────────────
 @app.action("next_click")
 def handle_next(ack, body, respond):
     ack()
-    data    = json.loads(body["actions"][0]["value"])
-    q_idx   = int(data["next"])
-    correct = int(data["c"])
-    wrong   = int(data["w"])
-    blocks  = build_question_blocks(q_idx, correct, wrong)
-    respond(replace_original=True, blocks=blocks,
-            text=QUESTIONS[q_idx % len(QUESTIONS)]["q"])
+    user = body["user"]["id"]
+    state = sessions.get(user)
+    if not state:
+        return respond(text="❗ No active game. Type `/start` to begin.")
+    # increment question index
+    state["q_idx"] += 1
+    q_idx, correct, wrong = state["q_idx"], state["correct"], state["wrong"]
+    blocks = build_question_blocks(q_idx, correct, wrong)
+    respond(
+        replace_original=True,
+        blocks=blocks,
+        text=QUESTIONS[q_idx % len(QUESTIONS)]["q"]
+    )
+
 
 # ── FLASK ROUTES ────────────────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
