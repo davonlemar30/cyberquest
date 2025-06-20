@@ -38,6 +38,10 @@ start_ui = [
           f"First to *{WIN_AT}* correct answers wins.\n"
           f"First to *{LOSE_AT}* wrong answers loses.\n\n"
           "Click below to begin your training—every question is a step toward safer habits."
+          "Think you're too smart to get phished? Think again.\n"
+          "Every right answer gets you closer to victory.\n"
+          "Every wrong answer? Closer to being hacked 😬\n"
+          "Good luck!"
         )
       }
     },
