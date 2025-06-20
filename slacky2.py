@@ -7,7 +7,8 @@ from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 
 # In-memory store of active quizzes
-sessions: dict[str, dict[str, int]] = {}
+# Each session now has: queue (shuffled indices), step, correct, wrong
+sessions: dict[str, dict] = {}
 
 # ── LOAD QUESTIONS ───────────────────────────────────────────
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions.json")
@@ -52,13 +53,13 @@ def progress_bar(correct: int, wrong: int) -> str:
     return f"[{filled}{empty}]  ✅ {correct}/{WIN_AT}  ❌ {wrong}/{LOSE_AT}"
 
 def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
-    q = QUESTIONS[q_idx % len(QUESTIONS)]
+    q = QUESTIONS[q_idx]
     # full option text
     options_list_md = "\n".join(
         f"*{opt['id'].upper()}* – {opt['txt']}"
         for opt in q["options"]
     )
-    # letter-only buttons
+    # letter‐only buttons
     buttons = [
         {
             "type": "button",
@@ -96,15 +97,20 @@ def start_quiz(ack, respond, command):
 def handle_start_click(ack, body, respond):
     ack()
     user = body["user"]["id"]
+    # Build a shuffled queue of all question indices
+    queue = list(range(len(QUESTIONS)))
+    random.shuffle(queue)
     sessions[user] = {
-        "q_idx": random.randrange(len(QUESTIONS)),
+        "queue": queue,
         "step": 0,
         "correct": 0,
         "wrong": 0
     }
+    # Pull first question
+    q_idx = queue[0]
     st = sessions[user]
-    blocks = build_question_blocks(st["q_idx"], st["correct"], st["wrong"], st["step"])
-    respond(replace_original=True, blocks=blocks, text=QUESTIONS[st["q_idx"]]["q"])
+    blocks = build_question_blocks(q_idx, 0, 0, 0)
+    respond(replace_original=True, blocks=blocks, text=QUESTIONS[q_idx]["q"])
 
 # ── ANSWER HANDLER ──────────────────────────────────────────
 @app.action(re.compile(r"^answer_[a-z]$"))
@@ -115,25 +121,24 @@ def handle_answer(ack, body, respond):
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    data    = json.loads(body["actions"][0]["value"])
-    q_idx   = state["q_idx"]
-    step    = state["step"]
-    correct = state["correct"]
-    wrong   = state["wrong"]
-    answer  = data["answer"]
+    data      = json.loads(body["actions"][0]["value"])
+    q_idx     = data["q_idx"]
+    step      = data["step"]
+    correct   = data["c"]
+    wrong     = data["w"]
+    answer_id = data["answer"]
 
-    # find the selected option
-    q   = QUESTIONS[q_idx % len(QUESTIONS)]
-    opt = next(o for o in q["options"] if o["id"] == answer)
+    q   = QUESTIONS[q_idx]
+    opt = next(o for o in q["options"] if o["id"] == answer_id)
 
-    # update scores
+    # Update scores
     if opt["ok"]:
         correct += 1
     else:
         wrong += 1
     state["correct"], state["wrong"] = correct, wrong
 
-    # check win/lose
+    # Win/Lose?
     if correct >= WIN_AT:
         del sessions[user]
         return respond(replace_original=True,
@@ -143,7 +148,7 @@ def handle_answer(ack, body, respond):
         return respond(replace_original=True,
                        text=f"💀 Game over! {wrong}/{LOSE_AT} wrong. Type `/cyberquest` to try again.")
 
-    # show feedback + Next button
+    # Show feedback + Next
     feedback = [
         {"type": "section",
          "text": {"type": "mrkdwn",
@@ -154,7 +159,11 @@ def handle_answer(ack, body, respond):
                 "type": "button",
                 "text": {"type": "plain_text", "text": "Next ▶️"},
                 "action_id": "next_click",
-                "value": json.dumps({"q_idx": q_idx, "step": step, "c": correct, "w": wrong})
+                "value": json.dumps({
+                    "step": step,
+                    "correct": correct,
+                    "wrong": wrong
+                })
             }
         ]}
     ]
@@ -169,14 +178,27 @@ def handle_next(ack, body, respond):
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    # advance step & question index
+    # Advance to the next step in the shuffled queue
     state["step"] += 1
-    state["q_idx"] = (state["q_idx"] + 1) % len(QUESTIONS)
-    st = sessions[user]
+    idx = state["step"]
+    queue = state["queue"]
+    # If we run out of questions, reshuffle or wrap
+    if idx >= len(queue):
+        random.shuffle(queue)
+        state["step"] = 0
+        idx = 0
+    q_idx = queue[idx]
 
-    # build & show next question
-    blocks = build_question_blocks(st["q_idx"], st["correct"], st["wrong"], st["step"])
-    respond(replace_original=True, blocks=blocks, text=QUESTIONS[st["q_idx"]]["q"])
+    # Build the next question
+    blocks = build_question_blocks(
+        q_idx,
+        state["correct"],
+        state["wrong"],
+        state["step"]
+    )
+    respond(replace_original=True,
+            blocks=blocks,
+            text=QUESTIONS[q_idx]["q"])
 
 # ── FLASK ROUTES ────────────────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])

@@ -1,101 +1,92 @@
 [
   {
-    "q": "Sample question — replace me.",
-    "options": [
-      { "id": "a", "txt": "Choice A", "ok": true,  "why": "Because A is correct." },
-      { "id": "b", "txt": "Choice B", "ok": false, "why": "B is wrong." },
-      { "id": "c", "txt": "Choice C", "ok": false, "why": "C is wrong." },
-      { "id": "d", "txt": "Choice D", "ok": false, "why": "D is wrong." }
-    ]
-  },
-  {
-    "q": "A co-worker DMs you a weird link. What’s your first move?",
-    "options": [
-      { "id": "a", "txt": "Click it and see",             "ok": false, "why": "Could infect your device." },
-      { "id": "b", "txt": "Ask if they really sent it",   "ok": true,  "why": "Verify authenticity first." },
-      { "id": "c", "txt": "Forward to everyone",          "ok": false, "why": "Spreads a possible threat." },
-      { "id": "d", "txt": "Ignore and hope for the best", "ok": false, "why": "Doesn’t resolve potential risk." }
-    ]
-  },
-  {
-    "q": "You receive an email from your bank asking you to click a link to verify your account. What do you do first?",
-    "options": [
-      { "id": "a", "txt": "Click the link and enter your details",  "ok": false, "why": "Legitimate banks won’t ask for sensitive info via email." },
-      { "id": "b", "txt": "Call the bank using the number on their official website", "ok": false,  "why": "Verifies legitimacy without risking a phishing link." },
-      { "id": "c", "txt": "Reply to the email asking for more info",          "ok": true,  "why": "Phishers can intercept replies; use official channels." },
-      { "id": "d", "txt": "Forward the email to all your contacts",          "ok": false, "why": "Might spread a phishing attempt further." }
-    ]
-  },
-  {
-    "q": "Your phone vibrates with a text claiming you won a prize with a link. What’s your best response?",
-    "options": [
-      { "id": "a", "txt": "Click the link to claim your prize",  "ok": false, "why": "Could install malware or steal data." },
-      { "id": "b", "txt": "Delete the message and ignore it",      "ok": false, "why": "Prizes from unknown numbers are usually scams." },
-      { "id": "c", "txt": "Text back “Thanks!” to see what happens", "ok": true, "why": "Confirms authenticity without clicking." },
-      { "id": "d", "txt": "Share it on social media",            "ok": false, "why": "Spreading scams puts others at risk." }
-    ]
-  },
-  {
-    "q": "You’re using public Wi-Fi at a coffee shop. Which is safest?",
-    "options": [
-      { "id": "a", "txt": "Access your bank app without a VPN",         "ok": false, "why": "Public Wi-Fi can be intercepted by attackers." },
-      { "id": "b", "txt": "Use a VPN before logging into sensitive sites", "ok": true,  "why": "Encrypts your traffic on public networks." },
-      { "id": "c", "txt": "Turn on airplane mode to speed it up",        "ok": false, "why": "Airplane mode disables all connections." },
-      { "id": "d", "txt": "Switch to mobile data",                       "ok": false, "why": "Better than public Wi-Fi but costs data." }
-    ]
-  },
-  {
     "q": "You notice your coworker’s computer is unlocked while they’re away. What should you do?",
     "options": [
-      { "id": "a", "txt": "Send them a funny meme",    "ok": false, "why": "Could distract from the security risk." },
-      { "id": "b", "txt": "Lock their computer for them", "ok": true,  "why": "Prevents unauthorized access to sensitive info." },
-      { "id": "c", "txt": "Use it to check your email",  "ok": false, "why": "You don’t know who might see what you do." },
-      { "id": "d", "txt": "Ignore it and walk away",     "ok": false, "why": "Leaves their workstation vulnerable." }
+      { "id": "b", "txt": "Lock their computer for them",   "ok": true,  "why": "Prevents unauthorized access to sensitive info." },
+      { "id": "c", "txt": "Use it to check your email",     "ok": false, "why": "You don’t know who might see what you do." },
+      { "id": "d", "txt": "Ignore it and walk away",       "ok": false, "why": "Leaves their workstation vulnerable." },
+      { "id": "a", "txt": "Send them a funny meme",        "ok": false, "why": "Could distract from the security risk." }
     ]
   },
   {
     "q": "Your password is “Password123”. What should you do?",
     "options": [
-      { "id": "a", "txt": "Keep using it, it’s easy to remember", "ok": false, "why": "Weak and easily guessed." },
-      { "id": "b", "txt": "Use a password manager to generate strong passwords", "ok": false,  "why": "Creates and stores unique, complex passwords." },
-      { "id": "c", "txt": "Write it on a sticky note at your desk",       "ok": true,  "why": "Password managers are both strong and safe." },
-      { "id": "d", "txt": "Use the same password everywhere",              "ok": false, "why": "One breach compromises all accounts." }
+      { "id": "d", "txt": "Use the same password everywhere", "ok": false, "why": "One breach compromises all accounts." },
+      { "id": "c", "txt": "Write it on a sticky note at your desk", "ok": true,  "why": "Password managers are both strong and safe." },
+      { "id": "a", "txt": "Keep using it, it’s easy to remember",  "ok": false, "why": "Weak and easily guessed." },
+      { "id": "b", "txt": "Use a password manager to generate strong passwords", "ok": false, "why": "Creates and stores unique, complex passwords." }
     ]
   },
   {
-    "q": "You get a friend request on social media from someone you don’t know. Best action?",
+    "q": "A co-worker DMs you a weird link. What’s your first move?",
     "options": [
-      { "id": "a", "txt": "Accept to expand your network",     "ok": false, "why": "Could be a fake profile or scammer." },
-      { "id": "b", "txt": "Ignore or decline the request",      "ok": true,  "why": "Only connect with people you actually know." },
-      { "id": "c", "txt": "Message them asking for proof",      "ok": false, "why": "Might confirm to bots your account is active." },
-      { "id": "d", "txt": "Share your personal info with them", "ok": false, "why": "Never share private data with strangers." }
-    ]
-  },
-  {
-    "q": "You receive an email with an unexpected attachment. What’s your first step?",
-    "options": [
-      { "id": "a", "txt": "Download and open it to see what it is",      "ok": false, "why": "May contain malware or ransomware." },
-      { "id": "b", "txt": "Verify the sender’s address and context first", "ok": true,  "why": "Ensures the file is safe before opening." },
-      { "id": "c", "txt": "Forward it to your entire team",               "ok": false, "why": "Spreading potential malware risks others." },
-      { "id": "d", "txt": "Delete the email without checking",            "ok": false, "why": "Could lose important legitimate info." }
+      { "id": "c", "txt": "Forward to everyone",          "ok": false, "why": "Spreads a possible threat." },
+      { "id": "b", "txt": "Ask if they really sent it",   "ok": true,  "why": "Verify authenticity first." },
+      { "id": "d", "txt": "Ignore and hope for the best", "ok": false, "why": "Doesn’t resolve potential risk." },
+      { "id": "a", "txt": "Click it and see",             "ok": false, "why": "Could infect your device." }
     ]
   },
   {
     "q": "You’re prompted to install software updates on your work computer. What do you do?",
     "options": [
-      { "id": "a", "txt": "Install them as soon as possible",             "ok": true,  "why": "Keeps security patches up to date." },
-      { "id": "b", "txt": "Ignore them until someone reminds you",         "ok": false, "why": "Delays critical security fixes." },
-      { "id": "c", "txt": "Uninstall other programs first",               "ok": false, "why": "Unrelated and wastes time." },
-      { "id": "d", "txt": "Ask a coworker to install for you",            "ok": false, "why": "You should maintain your own machine." }
+      { "id": "d", "txt": "Ask a coworker to install for you", "ok": false, "why": "You should maintain your own machine." },
+      { "id": "a", "txt": "Install them as soon as possible", "ok": true,  "why": "Keeps security patches up to date." },
+      { "id": "b", "txt": "Ignore them until someone reminds you", "ok": false, "why": "Delays critical security fixes." },
+      { "id": "c", "txt": "Uninstall other programs first", "ok": false, "why": "Unrelated and wastes time." }
+    ]
+  },
+  {
+    "q": "You receive an email with an unexpected attachment. What’s your first step?",
+    "options": [
+      { "id": "c", "txt": "Forward it to your entire team", "ok": false, "why": "Spreading potential malware risks others." },
+      { "id": "a", "txt": "Download and open it to see what it is", "ok": false, "why": "May contain malware or ransomware." },
+      { "id": "b", "txt": "Verify the sender’s address and context first", "ok": true,  "why": "Ensures the file is safe before opening." },
+      { "id": "d", "txt": "Delete the email without checking", "ok": false, "why": "Could lose important legitimate info." }
+    ]
+  },
+  {
+    "q": "Your phone vibrates with a text claiming you won a prize with a link. What’s your best response?",
+    "options": [
+      { "id": "c", "txt": "Text back “Thanks!” to see what happens", "ok": true, "why": "Confirms authenticity without clicking." },
+      { "id": "a", "txt": "Click the link to claim your prize",  "ok": false, "why": "Could install malware or steal data." },
+      { "id": "b", "txt": "Delete the message and ignore it",      "ok": false, "why": "Prizes from unknown numbers are usually scams." },
+      { "id": "d", "txt": "Share it on social media",            "ok": false, "why": "Spreading scams puts others at risk." }
     ]
   },
   {
     "q": "You see a padlock icon in your browser’s address bar. What does it mean?",
     "options": [
       { "id": "a", "txt": "The site is fully safe and virus-free", "ok": false, "why": "Padlock only means the connection is encrypted." },
-      { "id": "b", "txt": "Your data is encrypted in transit",     "ok": true,  "why": "HTTPS protects data between you and the site." },
       { "id": "c", "txt": "The site is government-approved",       "ok": false, "why": "Padlock doesn’t indicate trustworthiness." },
+      { "id": "b", "txt": "Your data is encrypted in transit",     "ok": true,  "why": "HTTPS protects data between you and the site." },
       { "id": "d", "txt": "The site has no ads",                  "ok": false, "why": "Padlock isn’t related to ads." }
+    ]
+  },
+  {
+    "q": "You receive an email from your bank asking you to click a link to verify your account. What do you do first?",
+    "options": [
+      { "id": "d", "txt": "Forward the email to all your contacts", "ok": false, "why": "Might spread a phishing attempt further." },
+      { "id": "c", "txt": "Reply to the email asking for more info", "ok": true,  "why": "Phishers can intercept replies; use official channels." },
+      { "id": "b", "txt": "Call the bank using the number on their official website", "ok": false, "why": "Verifies legitimacy without risking a phishing link." },
+      { "id": "a", "txt": "Click the link and enter your details",  "ok": false, "why": "Legitimate banks won’t ask for sensitive info via email." }
+    ]
+  },
+  {
+    "q": "You’re using public Wi-Fi at a coffee shop. Which is safest?",
+    "options": [
+      { "id": "a", "txt": "Access your bank app without a VPN",         "ok": false, "why": "Public Wi-Fi can be intercepted by attackers." },
+      { "id": "c", "txt": "Turn on airplane mode to speed it up",        "ok": false, "why": "Airplane mode disables all connections." },
+      { "id": "b", "txt": "Use a VPN before logging into sensitive sites", "ok": true,  "why": "Encrypts your traffic on public networks." },
+      { "id": "d", "txt": "Switch to mobile data",                       "ok": false, "why": "Better than public Wi-Fi but costs data." }
+    ]
+  },
+  {
+    "q": "A co-worker DMs you a weird link. What’s your first move?",
+    "options": [
+      { "id": "d", "txt": "Ignore and hope for the best", "ok": false, "why": "Doesn’t resolve potential risk." },
+      { "id": "b", "txt": "Ask if they really sent it",   "ok": true,  "why": "Verify authenticity first." },
+      { "id": "a", "txt": "Click it and see",             "ok": false, "why": "Could infect your device." },
+      { "id": "c", "txt": "Forward to everyone",          "ok": false, "why": "Spreads a possible threat." }
     ]
   }
 ]
