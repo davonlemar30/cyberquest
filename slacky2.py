@@ -54,27 +54,36 @@ def progress_bar(correct: int, wrong: int) -> str:
 
 def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     q = QUESTIONS[q_idx]
-    # full option text
+    # Shuffle a copy of this question's options
+    opts = q["options"].copy()
+    random.shuffle(opts)
+
+    # Always map positions to A, B, C, D
+    letters = ["A", "B", "C", "D"]
+
+    # Build the full‐text list for display
     options_list_md = "\n".join(
-        f"*{opt['id'].upper()}* – {opt['txt']}"
-        for opt in q["options"]
+        f"*{letters[i]}* – {opt['txt']}"
+        for i, opt in enumerate(opts)
     )
-    # letter‐only buttons
-    buttons = [
-        {
+
+    # Build buttons labeled A/B/C/D, carrying orig_id and position
+    buttons = []
+    for i, opt in enumerate(opts):
+        buttons.append({
             "type": "button",
-            "text": {"type": "plain_text", "text": opt["id"].upper()},
-            "action_id": f"answer_{opt['id']}",
+            "text": {"type": "plain_text", "text": letters[i]},
+            "action_id": f"answer_{letters[i]}",
             "value": json.dumps({
                 "q_idx": q_idx,
                 "step": step,
                 "c": correct,
                 "w": wrong,
-                "answer": opt["id"]
+                "choice_idx": i,
+                "orig_id": opt["id"]
             })
-        }
-        for opt in q["options"]
-    ]
+        })
+
     return [
         {"type": "section",
          "text": {"type": "mrkdwn",
@@ -100,23 +109,19 @@ def handle_start_click(ack, body, respond):
     # Build a shuffled queue of all question indices
     queue = list(range(len(QUESTIONS)))
     random.shuffle(queue)
-    sessions[user] = {
-        "queue": queue,
-        "step": 0,
-        "correct": 0,
-        "wrong": 0
-    }
-    # Pull first question
+    sessions[user] = {"queue": queue, "step": 0, "correct": 0, "wrong": 0}
+
+    # Show the first question
     q_idx = queue[0]
     st = sessions[user]
     blocks = build_question_blocks(q_idx, 0, 0, 0)
     respond(replace_original=True, blocks=blocks, text=QUESTIONS[q_idx]["q"])
 
 # ── ANSWER HANDLER ──────────────────────────────────────────
-@app.action(re.compile(r"^answer_[a-z]$"))
+@app.action(re.compile(r"^answer_[A-D]$"))
 def handle_answer(ack, body, respond):
     ack()
-    user = body["user"]["id"]
+    user  = body["user"]["id"]
     state = sessions.get(user)
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
@@ -126,10 +131,11 @@ def handle_answer(ack, body, respond):
     step      = data["step"]
     correct   = data["c"]
     wrong     = data["w"]
-    answer_id = data["answer"]
+    orig_id   = data["orig_id"]
 
+    # Look up the chosen option by its original ID
     q   = QUESTIONS[q_idx]
-    opt = next(o for o in q["options"] if o["id"] == answer_id)
+    opt = next(o for o in q["options"] if o["id"] == orig_id)
 
     # Update scores
     if opt["ok"]:
@@ -138,7 +144,7 @@ def handle_answer(ack, body, respond):
         wrong += 1
     state["correct"], state["wrong"] = correct, wrong
 
-    # Win/Lose?
+    # Check win/lose
     if correct >= WIN_AT:
         del sessions[user]
         return respond(replace_original=True,
@@ -148,7 +154,7 @@ def handle_answer(ack, body, respond):
         return respond(replace_original=True,
                        text=f"💀 Game over! {wrong}/{LOSE_AT} wrong. Type `/cyberquest` to try again.")
 
-    # Show feedback + Next
+    # Show feedback + Next ▶️
     feedback = [
         {"type": "section",
          "text": {"type": "mrkdwn",
@@ -159,11 +165,7 @@ def handle_answer(ack, body, respond):
                 "type": "button",
                 "text": {"type": "plain_text", "text": "Next ▶️"},
                 "action_id": "next_click",
-                "value": json.dumps({
-                    "step": step,
-                    "correct": correct,
-                    "wrong": wrong
-                })
+                "value": json.dumps({"step": step})
             }
         ]}
     ]
@@ -173,29 +175,25 @@ def handle_answer(ack, body, respond):
 @app.action("next_click")
 def handle_next(ack, body, respond):
     ack()
-    user = body["user"]["id"]
+    user  = body["user"]["id"]
     state = sessions.get(user)
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    # Advance to the next step in the shuffled queue
+    # Advance step & pick next question from the queue
     state["step"] += 1
-    idx = state["step"]
+    idx   = state["step"]
     queue = state["queue"]
-    # If we run out of questions, reshuffle or wrap
     if idx >= len(queue):
         random.shuffle(queue)
-        state["step"] = 0
-        idx = 0
+        state["step"], idx = 0, 0
     q_idx = queue[idx]
 
-    # Build the next question
-    blocks = build_question_blocks(
-        q_idx,
-        state["correct"],
-        state["wrong"],
-        state["step"]
-    )
+    # Render next question
+    blocks = build_question_blocks(q_idx,
+                                   state["correct"],
+                                   state["wrong"],
+                                   state["step"])
     respond(replace_original=True,
             blocks=blocks,
             text=QUESTIONS[q_idx]["q"])
