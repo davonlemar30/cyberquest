@@ -53,40 +53,35 @@ def progress_bar(correct: int, wrong: int) -> str:
 
 def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     q = QUESTIONS[q_idx % len(QUESTIONS)]
-    # list out full option text
+    # full option text
     options_list_md = "\n".join(
         f"*{opt['id'].upper()}* – {opt['txt']}"
         for opt in q["options"]
     )
-
-    # buttons only show the letter
+    # letter-only buttons
     buttons = [
         {
             "type": "button",
             "text": {"type": "plain_text", "text": opt["id"].upper()},
             "action_id": f"answer_{opt['id']}",
             "value": json.dumps({
-                "q": q_idx,
-                "answer": opt["id"],
+                "q_idx": q_idx,
+                "step": step,
                 "c": correct,
                 "w": wrong,
-                "step": step
+                "answer": opt["id"]
             })
         }
         for opt in q["options"]
     ]
-
     return [
-        # header + question
         {"type": "section",
          "text": {"type": "mrkdwn",
                   "text": f"{progress_bar(correct, wrong)}\n*Q{step+1}:* {q['q']}"
          }},
-        # show full option text
         {"type": "section",
          "text": {"type": "mrkdwn", "text": options_list_md}
         },
-        # buttons with just A/B/C/D
         {"type": "actions", "elements": buttons}
     ]
 
@@ -101,7 +96,6 @@ def start_quiz(ack, respond, command):
 def handle_start_click(ack, body, respond):
     ack()
     user = body["user"]["id"]
-    # new session
     sessions[user] = {
         "q_idx": random.randrange(len(QUESTIONS)),
         "step": 0,
@@ -121,25 +115,25 @@ def handle_answer(ack, body, respond):
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    data      = json.loads(body["actions"][0]["value"])
-    q_idx     = state["q_idx"]
-    step      = state["step"]
-    correct   = state["correct"]
-    wrong     = state["wrong"]
-    answer_id = data["answer"]
+    data    = json.loads(body["actions"][0]["value"])
+    q_idx   = state["q_idx"]
+    step    = state["step"]
+    correct = state["correct"]
+    wrong   = state["wrong"]
+    answer  = data["answer"]
 
+    # find the selected option
     q   = QUESTIONS[q_idx % len(QUESTIONS)]
-    opt = next(o for o in q["options"] if o["id"] == answer_id)
+    opt = next(o for o in q["options"] if o["id"] == answer)
+
+    # update scores
     if opt["ok"]:
         correct += 1
     else:
         wrong += 1
+    state["correct"], state["wrong"] = correct, wrong
 
-    # update state
-    state["correct"] = correct
-    state["wrong"]   = wrong
-
-    # win/lose?
+    # check win/lose
     if correct >= WIN_AT:
         del sessions[user]
         return respond(replace_original=True,
@@ -149,12 +143,40 @@ def handle_answer(ack, body, respond):
         return respond(replace_original=True,
                        text=f"💀 Game over! {wrong}/{LOSE_AT} wrong. Type `/cyberquest` to try again.")
 
-    # next question
+    # show feedback + Next button
+    feedback = [
+        {"type": "section",
+         "text": {"type": "mrkdwn",
+                  "text": f"*{'✅ Correct!' if opt['ok'] else '❌ Incorrect.'}*\n{opt['why']}"
+         }},
+        {"type": "actions", "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Next ▶️"},
+                "action_id": "next_click",
+                "value": json.dumps({"q_idx": q_idx, "step": step, "c": correct, "w": wrong})
+            }
+        ]}
+    ]
+    respond(replace_original=True, blocks=feedback)
+
+# ── NEXT BUTTON ──────────────────────────────────────────────
+@app.action("next_click")
+def handle_next(ack, body, respond):
+    ack()
+    user = body["user"]["id"]
+    state = sessions.get(user)
+    if not state:
+        return respond(text="❗ No active game. Type `/cyberquest` to start.")
+
+    # advance step & question index
     state["step"] += 1
-    state["q_idx"] = (q_idx + 1) % len(QUESTIONS)
-    new = sessions[user]
-    blocks = build_question_blocks(new["q_idx"], new["correct"], new["wrong"], new["step"])
-    respond(replace_original=True, blocks=blocks, text=QUESTIONS[new["q_idx"]]["q"])
+    state["q_idx"] = (state["q_idx"] + 1) % len(QUESTIONS)
+    st = sessions[user]
+
+    # build & show next question
+    blocks = build_question_blocks(st["q_idx"], st["correct"], st["wrong"], st["step"])
+    respond(replace_original=True, blocks=blocks, text=QUESTIONS[st["q_idx"]]["q"])
 
 # ── FLASK ROUTES ────────────────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
