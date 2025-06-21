@@ -36,6 +36,9 @@ start_ui = [
             "text": (
                 "*🎮 Welcome to CyberQuest!*\n\n"
                 f"First to *{WIN_AT}* correct wins. First to *{LOSE_AT}* wrong loses.\n\n"
+                "*Think you're too smart to get phished? Think again.*\n"
+                "Every right answer gets you closer to victory.\n"
+                "Every wrong answer? Closer to being hacked 😬\n\n"
                 "Choose a mode to begin:"
             )
         }
