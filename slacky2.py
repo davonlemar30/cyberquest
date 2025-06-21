@@ -30,33 +30,37 @@ sessions: dict[str, dict] = {}
 # ── INTRO UI ─────────────────────────────────────────────────
 start_ui = [
     {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": (
-          "*🎮 Welcome to CyberQuest!* 🚨\n\n"
-          f"First to *{WIN_AT}* correct answers wins.\n"
-          f"First to *{LOSE_AT}* wrong answers loses.\n\n"
-          "Think you're too smart to get phished? Think again.\n"
-          "Every right answer gets you closer to victory.\n"
-          "Every wrong answer? Closer to being hacked 😬\n"
-          "Click below to begin your training. Good luck!"
-        )
-      }
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": (
+                "*🎮 Welcome to CyberQuest!*\n\n"
+                f"First to *{WIN_AT}* correct wins. First to *{LOSE_AT}* wrong loses.\n\n"
+                "Choose a mode to begin:"
+            )
+        }
     },
     {"type": "divider"},
     {
-      "type": "actions",
-      "elements": [
-        {
-          "type": "button",
-          "text": {"type": "plain_text", "text": "🔥 Start Game", "emoji": True},
-          "action_id": "start_game_click",
-          "value": "start"
-        }
-      ]
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🧠 Start Quiz", "emoji": True},
+                "action_id": "start_game_click",
+                "value": "start"
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🚨 Start Adventure (Coming Soon)", "emoji": True},
+                "action_id": "start_adventure_click",
+                "value": "coming_soon",
+                "style": "danger"
+            }
+        ]
     }
 ]
+
 
 # ── HELPERS ──────────────────────────────────────────────────
 def progress_bar(correct: int, wrong: int) -> str:
@@ -223,6 +227,15 @@ def handle_next(ack, body, respond):
     respond(replace_original=True,
             blocks=blocks,
             text=QUESTIONS[q_idx]["q"])
+
+# ── ADVENTURE MODE ──────────────────────────────────────────
+@app.action("start_adventure_click")
+def handle_adventure_click(ack, respond):
+    ack()
+    respond(
+        text="🛠️ *Adventure Mode is coming soon!* Stay tuned for a more immersive training experience.",
+        replace_original=False
+    )
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
