@@ -12,9 +12,9 @@
     "q": "Your password is “Password123”. What should you do?",
     "options": [
       { "id": "d", "txt": "Use the same password everywhere", "ok": false, "why": "One breach compromises all accounts." },
-      { "id": "c", "txt": "Write it on a sticky note at your desk", "ok": true,  "why": "Password managers are both strong and safe." },
+      { "id": "c", "txt": "Write it on a sticky note at your desk", "ok": false, "why": "Sticky notes are easy to lose or see." },
       { "id": "a", "txt": "Keep using it, it’s easy to remember",  "ok": false, "why": "Weak and easily guessed." },
-      { "id": "b", "txt": "Use a password manager to generate strong passwords", "ok": false, "why": "Creates and stores unique, complex passwords." }
+      { "id": "b", "txt": "Use a password manager to generate strong passwords", "ok": true, "why": "Creates and stores unique, complex passwords." }
     ]
   },
   {
@@ -47,9 +47,9 @@
   {
     "q": "Your phone vibrates with a text claiming you won a prize with a link. What’s your best response?",
     "options": [
-      { "id": "c", "txt": "Text back “Thanks!” to see what happens", "ok": true, "why": "Confirms authenticity without clicking." },
+      { "id": "c", "txt": "Text back “Thanks!” to see what happens", "ok": false, "why": "Engaging with scam texts confirms your number is active." },
       { "id": "a", "txt": "Click the link to claim your prize",  "ok": false, "why": "Could install malware or steal data." },
-      { "id": "b", "txt": "Delete the message and ignore it",      "ok": false, "why": "Prizes from unknown numbers are usually scams." },
+      { "id": "b", "txt": "Delete the message and ignore it",      "ok": true, "why": "Best way to handle obvious scams." },
       { "id": "d", "txt": "Share it on social media",            "ok": false, "why": "Spreading scams puts others at risk." }
     ]
   },
@@ -66,8 +66,8 @@
     "q": "You receive an email from your bank asking you to click a link to verify your account. What do you do first?",
     "options": [
       { "id": "d", "txt": "Forward the email to all your contacts", "ok": false, "why": "Might spread a phishing attempt further." },
-      { "id": "c", "txt": "Reply to the email asking for more info", "ok": true,  "why": "Phishers can intercept replies; use official channels." },
-      { "id": "b", "txt": "Call the bank using the number on their official website", "ok": false, "why": "Verifies legitimacy without risking a phishing link." },
+      { "id": "c", "txt": "Reply to the email asking for more info", "ok": false, "why": "Phishers can intercept replies; use official channels." },
+      { "id": "b", "txt": "Call the bank using the number on their official website", "ok": true,  "why": "Verifies legitimacy without risking a phishing link." },
       { "id": "a", "txt": "Click the link and enter your details",  "ok": false, "why": "Legitimate banks won’t ask for sensitive info via email." }
     ]
   },
@@ -78,15 +78,6 @@
       { "id": "c", "txt": "Turn on airplane mode to speed it up",        "ok": false, "why": "Airplane mode disables all connections." },
       { "id": "b", "txt": "Use a VPN before logging into sensitive sites", "ok": true,  "why": "Encrypts your traffic on public networks." },
       { "id": "d", "txt": "Switch to mobile data",                       "ok": false, "why": "Better than public Wi-Fi but costs data." }
-    ]
-  },
-  {
-    "q": "A co-worker DMs you a weird link. What’s your first move?",
-    "options": [
-      { "id": "d", "txt": "Ignore and hope for the best", "ok": false, "why": "Doesn’t resolve potential risk." },
-      { "id": "b", "txt": "Ask if they really sent it",   "ok": true,  "why": "Verify authenticity first." },
-      { "id": "a", "txt": "Click it and see",             "ok": false, "why": "Could infect your device." },
-      { "id": "c", "txt": "Forward to everyone",          "ok": false, "why": "Spreads a possible threat." }
     ]
   }
 ]
