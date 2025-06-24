@@ -5,7 +5,7 @@ import random
 from flask import Flask, request
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
-from cyber_adventure import handle_adventure_start, handle_adventure_choice
+from cyberquestadv import handle_adventure_start, handle_adventure_choice
 
 # ── LOAD QUESTIONS ───────────────────────────────────────────
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions.json")
