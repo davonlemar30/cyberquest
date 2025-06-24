@@ -5,9 +5,12 @@ import random
 from flask import Flask, request
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
+from cyberquestadv import handle_adventure_start, handle_adventure_choice
+
 
 # ── LOAD QUESTIONS ───────────────────────────────────────────
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions.json")
+
 with open(QUESTIONS_PATH, "r") as f:
     QUESTIONS = json.load(f)
 
@@ -234,19 +237,27 @@ def handle_next(ack, body, respond):
 # ── ADVENTURE MODE ──────────────────────────────────────────
 MY_USER_ID = "U06N9F2BV4P"
 @app.action("start_adventure_click")
-def handle_adventure_click(ack, body, respond):
+def start_adventure_click(ack, body, respond):
     ack()
-    user = body["user"]["id"]
+    user_id = body["user"]["id"]
 
-    if user != MY_USER_ID:
+    if user_id != MY_USER_ID:
         return respond(
             text="🛠️ *Adventure Mode is coming soon!* Stay tuned for a more immersive training experience.",
             replace_original=False
         )
 
-    # Otherwise, start private test scene
-    blocks = build_adventure_intro()  # You'll define this
-    respond(replace_original=True, blocks=blocks, text="⚡ CyberQuest: Adventure Mode Initiated")
+    # ✅ This part runs only for YOU
+    blocks = handle_adventure_start(user_id)
+    respond(replace_original=True, blocks=blocks)
+# ── ADVENTURE ACTION HANDLER ──────────────────────────────────
+@app.action(re.compile(r"^adv_\d+$"))
+def handle_adventure_action(ack, body, respond):
+    ack()
+    action_id = body["actions"][0]["action_id"]
+    value = body["actions"][0]["value"]
+    blocks = handle_adventure_choice(action_id, value)
+    respond(replace_original=True, blocks=blocks)
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
