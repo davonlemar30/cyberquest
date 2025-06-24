@@ -232,13 +232,21 @@ def handle_next(ack, body, respond):
             text=QUESTIONS[q_idx]["q"])
 
 # ── ADVENTURE MODE ──────────────────────────────────────────
+MY_USER_ID = "U06N9F2BV4P"
 @app.action("start_adventure_click")
-def handle_adventure_click(ack, respond):
+def handle_adventure_click(ack, body, respond):
     ack()
-    respond(
-        text="🛠️ *Adventure Mode is coming soon!* Stay tuned for a more immersive training experience.",
-        replace_original=False
-    )
+    user = body["user"]["id"]
+
+    if user != MY_USER_ID:
+        return respond(
+            text="🛠️ *Adventure Mode is coming soon!* Stay tuned for a more immersive training experience.",
+            replace_original=False
+        )
+
+    # Otherwise, start private test scene
+    blocks = build_adventure_intro()  # You'll define this
+    respond(replace_original=True, blocks=blocks, text="⚡ CyberQuest: Adventure Mode Initiated")
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
