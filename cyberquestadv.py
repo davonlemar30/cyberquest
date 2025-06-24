@@ -25,13 +25,67 @@ SCENES = {
         ]
     },
 
+        # ── Sales: Step 1 — Create Your Password ─────────────────────────
     "sales_intro": {
-        "description": "*📞 Sales Intro*\n\nYou get an email from “client@example.com” asking for a quote. The domain looks off.\n\n*What do you do?*",
+        "description": (
+            "*📥 Welcome to Microcom Sales!* 🚀\n"
+            "It’s your first day—HR hands you your onboarding package and your new Gmail login. "
+            "When you log in, you’re immediately prompted to *create* a password.\n\n"
+            "*Choose the strongest realistic password:*"
+        ),
         "choices": [
-            {"text": "Reply with pricing",   "next_scene": "phishing_trap", "tags_added": ["ignored_red_flag"]},
-            {"text": "Forward to IT",        "next_scene": "safe_path"}
+            {
+                "text": "Password123!",
+                "next_scene": "sales_email",
+                "tags_added": ["weak_password"],
+                "score_change": -2
+            },
+            {
+                "text": "Spring2025*Sale",
+                "next_scene": "sales_email",
+                "tags_added": ["ok_password"],
+                "score_change": 0
+            },
+            {
+                "text": "M!cr0c0m$4l3s*",
+                "next_scene": "sales_email",
+                "tags_added": ["strong_password"],
+                "score_change": 2
+            },
+            {
+                "text": "1234567890",
+                "next_scene": "sales_email",
+                "tags_added": ["terrible_password"],
+                "score_change": -3
+            }
         ]
     },
+
+    # ── Sales: Step 2 — First Sales Email ─────────────────────────────
+    "sales_email": {
+        "description": (
+            "*📞 Sales Intro Continued*\n\n"
+            "Now that you’ve set your password, you open Gmail and see:\n\n"
+            "> From: client@example.com\n"
+            "> Subject: ‘Request for quote’\n\n"
+            "The domain looks off—what do you do?"
+        ),
+        "choices": [
+            {
+                "text": "Reply with pricing info",
+                "next_scene": "phishing_trap",
+                "tags_added": ["ignored_red_flag"],
+                "score_change": -1
+            },
+            {
+                "text": "Forward to IT Security",
+                "next_scene": "safe_path",
+                "tags_added": ["reported_phish"],
+                "score_change": 1
+            }
+        ]
+    },
+
 
     "dispatch_intro": {
         "description": "*📦 Dispatch Intro*\n\nA new ticket pops up: “URGENT: Customer’s router is offline—reset now!” The request came via an unknown third-party email.\n\n*How do you proceed?*",
