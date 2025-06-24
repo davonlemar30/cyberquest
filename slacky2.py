@@ -5,12 +5,10 @@ import random
 from flask import Flask, request
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
-from cyberquestadv import handle_adventure_start, handle_adventure_choice
-
+from cyber_adventure import handle_adventure_start, handle_adventure_choice
 
 # ── LOAD QUESTIONS ───────────────────────────────────────────
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions.json")
-
 with open(QUESTIONS_PATH, "r") as f:
     QUESTIONS = json.load(f)
 
@@ -67,7 +65,6 @@ start_ui = [
     }
 ]
 
-
 # ── HELPERS ──────────────────────────────────────────────────
 def progress_bar(correct: int, wrong: int) -> str:
     filled = "█" * min(correct, BAR_LEN)
@@ -80,10 +77,7 @@ def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     random.shuffle(opts)
     letters = ["A", "B", "C", "D"]
 
-    # Markdown list of options
     options_md = "\n".join(f"*{letters[i]}* – {opt['txt']}" for i, opt in enumerate(opts))
-
-    # Buttons for each shuffled choice
     buttons = []
     for i, opt in enumerate(opts):
         buttons.append({
@@ -91,30 +85,30 @@ def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
             "text": {"type": "plain_text", "text": letters[i]},
             "action_id": f"answer_{letters[i]}",
             "value": json.dumps({
-                "q_idx":       q_idx,
-                "step":        step,
-                "c":           correct,
-                "w":           wrong,
-                "choice_idx":  i,
-                "orig_id":     opt["id"]
+                "q_idx":      q_idx,
+                "step":       step,
+                "c":          correct,
+                "w":          wrong,
+                "choice_idx": i,
+                "orig_id":    opt["id"]
             })
         })
 
     return [
         {
-          "type": "section",
-          "text": {
-            "type": "mrkdwn",
-            "text": f"{progress_bar(correct, wrong)}\n*Q{step+1}:* {q['q']}"
-          }
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{progress_bar(correct, wrong)}\n*Q{step+1}:* {q['q']}"
+            }
         },
         {
-          "type": "section",
-          "text": {"type": "mrkdwn", "text": options_md}
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": options_md}
         },
         {
-          "type": "actions",
-          "elements": buttons
+            "type": "actions",
+            "elements": buttons
         }
     ]
 
@@ -124,22 +118,22 @@ def start_quiz(ack, respond, command):
     ack()
     respond(blocks=start_ui, text="Ready for CyberQuest!")
 
-# ── START BUTTON ────────────────────────────────────────────
+# ── START QUIZ BUTTON ────────────────────────────────────────
 @app.action("start_game_click")
 def handle_start_click(ack, body, respond):
     ack()
     user = body["user"]["id"]
-    # Initialize session
     queue = list(range(len(QUESTIONS)))
     random.shuffle(queue)
     sessions[user] = {"queue": queue, "step": 0, "correct": 0, "wrong": 0}
 
-    # Send first question
     q_idx = queue[0]
     blocks = build_question_blocks(q_idx, 0, 0, 0)
-    respond(replace_original=True,
-            blocks=blocks,
-            text=QUESTIONS[q_idx]["q"])
+    respond(
+        replace_original=True,
+        blocks=blocks,
+        text=QUESTIONS[q_idx]["q"]
+    )
 
 # ── ANSWER HANDLER ──────────────────────────────────────────
 @app.action(re.compile(r"^answer_[A-D]$"))
@@ -157,11 +151,9 @@ def handle_answer(ack, body, respond):
     wrong   = data["w"]
     orig_id = data["orig_id"]
 
-    # Lookup the chosen option
     q   = QUESTIONS[q_idx]
     opt = next(o for o in q["options"] if o["id"] == orig_id)
 
-    # Update scores
     if opt["ok"]:
         correct += 1
         feedback_emoji = "🟢"
@@ -174,35 +166,34 @@ def handle_answer(ack, body, respond):
     sessions[user]["correct"] = correct
     sessions[user]["wrong"]   = wrong
 
-    # Check win/lose
     if correct >= WIN_AT:
         del sessions[user]
-        return respond(replace_original=True,
-                       text=f"🏆 You win! {correct}/{WIN_AT} correct. Type `/cyberquest` to play again.")
+        return respond(
+            replace_original=True,
+            text=f"🏆 You win! {correct}/{WIN_AT} correct. Type `/cyberquest` to play again."
+        )
     if wrong >= LOSE_AT:
         del sessions[user]
-        return respond(replace_original=True,
-                       text=f"💀 Game over! {wrong}/{LOSE_AT} wrong. Type `/cyberquest` to try again.")
+        return respond(
+            replace_original=True,
+            text=f"💀 Game over! {wrong}/{LOSE_AT} wrong. Type `/cyberquest` to try again."
+        )
 
-    # Build feedback + Next button
     feedback_blocks = [
         {
-          "type": "section",
-          "text": {
-            "type": "mrkdwn",
-            "text": f"{feedback_emoji} {feedback_text}\n{opt['why']}"
-          }
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{feedback_emoji} {feedback_text}\n{opt['why']}"}
         },
         {
-          "type": "actions",
-          "elements": [
-            {
-              "type": "button",
-              "text": {"type": "plain_text", "text": "Next ▶️"},
-              "action_id": "next_click",
-              "value": json.dumps({"step": step})
-            }
-          ]
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Next ▶️"},
+                    "action_id": "next_click",
+                    "value": json.dumps({"step": step})
+                }
+            ]
         }
     ]
     respond(replace_original=True, blocks=feedback_blocks)
@@ -216,7 +207,6 @@ def handle_next(ack, body, respond):
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    # Advance step
     state["step"] += 1
     idx   = state["step"]
     queue = state["queue"]
@@ -225,21 +215,29 @@ def handle_next(ack, body, respond):
         state["step"], idx = 0, 0
     q_idx = queue[idx]
 
-    # Send next question
-    blocks = build_question_blocks(q_idx,
-                                   state["correct"],
-                                   state["wrong"],
-                                   state["step"])
-    respond(replace_original=True,
-            blocks=blocks,
-            text=QUESTIONS[q_idx]["q"])
+    blocks = build_question_blocks(
+        q_idx,
+        state["correct"],
+        state["wrong"],
+        state["step"]
+    )
+    respond(
+        replace_original=True,
+        blocks=blocks,
+        text=QUESTIONS[q_idx]["q"]
+    )
 
 # ── ADVENTURE MODE ──────────────────────────────────────────
-MY_USER_ID = "U06N9F2BV4P"
+MY_USER_ID = "U06N9F2BV4P"  # your Slack user ID here
+
 @app.action("start_adventure_click")
-def start_adventure_click(ack, body, respond):
+def start_adventure_click(ack, body, respond, client):
     ack()
     user_id = body["user"]["id"]
+
+    # fetch the user's Slack display name
+    profile = client.users_info(user=user_id)["user"]["profile"]
+    display_name = profile.get("display_name") or profile.get("real_name") or "Player"
 
     if user_id != MY_USER_ID:
         return respond(
@@ -247,16 +245,15 @@ def start_adventure_click(ack, body, respond):
             replace_original=False
         )
 
-    # ✅ This part runs only for YOU
-    blocks = handle_adventure_start(user_id)
+    blocks = handle_adventure_start(user_id, display_name)
     respond(replace_original=True, blocks=blocks)
-# ── ADVENTURE ACTION HANDLER ──────────────────────────────────
+
 @app.action(re.compile(r"^adv_\d+$"))
 def handle_adventure_action(ack, body, respond):
     ack()
     action_id = body["actions"][0]["action_id"]
-    value = body["actions"][0]["value"]
-    blocks = handle_adventure_choice(action_id, value)
+    value     = body["actions"][0]["value"]
+    blocks    = handle_adventure_choice(action_id, value)
     respond(replace_original=True, blocks=blocks)
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
