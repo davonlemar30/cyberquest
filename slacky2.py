@@ -245,16 +245,26 @@ def start_adventure_click(ack, body, respond, client):
             replace_original=False
         )
 
+    # launch the adventure for you
     blocks = handle_adventure_start(user_id, display_name)
     respond(replace_original=True, blocks=blocks)
 
+
+# ── ADVENTURE CHOICE HANDLER ─────────────────────────────────
+# note: regex is r"^adv_\d+$", not with a double backslash
 @app.action(re.compile(r"^adv_\d+$"))
-def handle_adventure_action(ack, body, respond):
+def handle_adventure_choice_action(ack, body, respond):
     ack()
-    action_id = body["actions"][0]["action_id"]
-    value     = body["actions"][0]["value"]
-    blocks    = handle_adventure_choice(action_id, value)
+
+    # value is "U12345:0" → "<user_id>:<choice_index>"
+    value = body["actions"][0]["value"]
+
+    # delegate to your cyberquestadv engine
+    blocks = handle_adventure_choice(None, value)
+
     respond(replace_original=True, blocks=blocks)
+
+
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
 @flask_app.route("/slack/commands", methods=["POST"])
