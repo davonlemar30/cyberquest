@@ -13,16 +13,16 @@ with open(QUESTIONS_PATH, "r") as f:
     QUESTIONS = json.load(f)
 
 # ── CONFIG ───────────────────────────────────────────────────
-WIN_AT               = int(os.getenv("WIN_AT", 10))
-LOSE_AT              = int(os.getenv("LOSE_AT", 5))
-BAR_LEN              = int(os.getenv("BAR_LEN", 10))
-SLACK_BOT_TOKEN      = os.environ["SLACK_BOT_TOKEN"]
+WIN_AT = int(os.getenv("WIN_AT", 10))
+LOSE_AT = int(os.getenv("LOSE_AT", 5))
+BAR_LEN = int(os.getenv("BAR_LEN", 10))
+SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
 
 # ── APP INIT ─────────────────────────────────────────────────
-app       = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 flask_app = Flask(__name__)
-handler   = SlackRequestHandler(app)
+handler = SlackRequestHandler(app)
 
 # ── IN-MEMORY SESSION STORE ─────────────────────────────────
 # user_id → { queue: [...], step: int, correct: int, wrong: int }
@@ -66,10 +66,13 @@ start_ui = [
 ]
 
 # ── HELPERS ──────────────────────────────────────────────────
+
+
 def progress_bar(correct: int, wrong: int) -> str:
     filled = "█" * min(correct, BAR_LEN)
-    empty  = "░" * (BAR_LEN - len(filled))
+    empty = "░" * (BAR_LEN - len(filled))
     return f"[{filled}{empty}]  ✅ {correct}/{WIN_AT}  ❌ {wrong}/{LOSE_AT}"
+
 
 def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     q = QUESTIONS[q_idx]
@@ -77,7 +80,8 @@ def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     random.shuffle(opts)
     letters = ["A", "B", "C", "D"]
 
-    options_md = "\n".join(f"*{letters[i]}* – {opt['txt']}" for i, opt in enumerate(opts))
+    options_md = "\n".join(
+        f"*{letters[i]}* – {opt['txt']}" for i, opt in enumerate(opts))
     buttons = []
     for i, opt in enumerate(opts):
         buttons.append({
@@ -113,12 +117,16 @@ def build_question_blocks(q_idx: int, correct: int, wrong: int, step: int):
     ]
 
 # ── SLASH COMMAND ────────────────────────────────────────────
+
+
 @app.command("/cyberquest")
 def start_quiz(ack, respond, command):
     ack()
     respond(blocks=start_ui, text="Ready for CyberQuest!")
 
 # ── START QUIZ BUTTON ────────────────────────────────────────
+
+
 @app.action("start_game_click")
 def handle_start_click(ack, body, respond):
     ack()
@@ -136,6 +144,8 @@ def handle_start_click(ack, body, respond):
     )
 
 # ── ANSWER HANDLER ──────────────────────────────────────────
+
+
 @app.action(re.compile(r"^answer_[A-D]$"))
 def handle_answer(ack, body, respond):
     ack()
@@ -144,27 +154,27 @@ def handle_answer(ack, body, respond):
     if not state:
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
-    data    = json.loads(body["actions"][0]["value"])
-    q_idx   = data["q_idx"]
-    step    = data["step"]
+    data = json.loads(body["actions"][0]["value"])
+    q_idx = data["q_idx"]
+    step = data["step"]
     correct = data["c"]
-    wrong   = data["w"]
+    wrong = data["w"]
     orig_id = data["orig_id"]
 
-    q   = QUESTIONS[q_idx]
+    q = QUESTIONS[q_idx]
     opt = next(o for o in q["options"] if o["id"] == orig_id)
 
     if opt["ok"]:
         correct += 1
         feedback_emoji = "🟢"
-        feedback_text  = "*Correct!*"
+        feedback_text = "*Correct!*"
     else:
         wrong += 1
         feedback_emoji = "🔴"
-        feedback_text  = "*Incorrect.*"
+        feedback_text = "*Incorrect.*"
 
     sessions[user]["correct"] = correct
-    sessions[user]["wrong"]   = wrong
+    sessions[user]["wrong"] = wrong
 
     if correct >= WIN_AT:
         del sessions[user]
@@ -199,6 +209,8 @@ def handle_answer(ack, body, respond):
     respond(replace_original=True, blocks=feedback_blocks)
 
 # ── NEXT BUTTON ──────────────────────────────────────────────
+
+
 @app.action("next_click")
 def handle_next(ack, body, respond):
     ack()
@@ -208,7 +220,7 @@ def handle_next(ack, body, respond):
         return respond(text="❗ No active game. Type `/cyberquest` to start.")
 
     state["step"] += 1
-    idx   = state["step"]
+    idx = state["step"]
     queue = state["queue"]
     if idx >= len(queue):
         random.shuffle(queue)
@@ -227,8 +239,10 @@ def handle_next(ack, body, respond):
         text=QUESTIONS[q_idx]["q"]
     )
 
+
 # ── ADVENTURE MODE ──────────────────────────────────────────
 MY_USER_ID = "U06N9F2BV4P"  # your Slack user ID here
+
 
 @app.action("start_adventure_click")
 def start_adventure_click(ack, body, respond, client):
@@ -237,7 +251,8 @@ def start_adventure_click(ack, body, respond, client):
 
     # fetch the user's Slack display name
     profile = client.users_info(user=user_id)["user"]["profile"]
-    display_name = profile.get("display_name") or profile.get("real_name") or "Player"
+    display_name = profile.get("display_name") or profile.get(
+        "real_name") or "Player"
 
     if user_id != MY_USER_ID:
         return respond(
@@ -252,18 +267,23 @@ def start_adventure_click(ack, body, respond, client):
 
 # ── ADVENTURE CHOICE HANDLER ─────────────────────────────────
 # note: regex is r"^adv_\d+$", not with a double backslash
-@app.action(re.compile(r"^adv_\d+$"))
-def handle_adventure_choice_action(ack, body, respond):
-    ack()
+@app.action("adv_0")
+def handle_adventure_choice_action(ack, body, client, logger):
+    ack()  # ✅ This tells Slack you received the interaction
 
-    # value is "U12345:0" → "<user_id>:<choice_index>"
+    user_id = body["user"]["id"]
     value = body["actions"][0]["value"]
 
-    # delegate to your cyberquestadv engine
     blocks = handle_adventure_choice(None, value)
 
-    respond(replace_original=True, blocks=blocks)
-
+    try:
+        client.chat_update(
+            channel=body["channel"]["id"],
+            ts=body["message"]["ts"],
+            blocks=blocks
+        )
+    except Exception as e:
+        logger.error(f"Error updating message: {e}")
 
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
@@ -271,13 +291,16 @@ def handle_adventure_choice_action(ack, body, respond):
 def slack_commands():
     return handler.handle(request)
 
+
 @flask_app.route("/slack/interactive", methods=["POST"])
 def slack_interactive():
     return handler.handle(request)
 
+
 @flask_app.route("/", methods=["GET"])
 def health():
     return "🟢 CyberQuest is alive", 200
+
 
 if __name__ == "__main__":
     flask_app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
