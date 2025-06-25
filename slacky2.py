@@ -267,23 +267,16 @@ def start_adventure_click(ack, body, respond, client):
 
 # ── ADVENTURE CHOICE HANDLER ─────────────────────────────────
 # note: regex is r"^adv_\d+$", not with a double backslash
-@app.action("adv_0")
-def handle_adventure_choice_action(ack, body, client, logger):
-    ack()  # ✅ This tells Slack you received the interaction
+@app.action(re.compile(r"^adv_\d+$"))
+def handle_adventure_choice_action(ack, body, respond):
+    ack()
 
-    user_id = body["user"]["id"]
+    # value has "user_id:choice_idx"
     value = body["actions"][0]["value"]
 
     blocks = handle_adventure_choice(None, value)
 
-    try:
-        client.chat_update(
-            channel=body["channel"]["id"],
-            ts=body["message"]["ts"],
-            blocks=blocks
-        )
-    except Exception as e:
-        logger.error(f"Error updating message: {e}")
+    respond(replace_original=True, blocks=blocks)
 
 
 # ── FLASK ROUTES & HEALTH ───────────────────────────────────
